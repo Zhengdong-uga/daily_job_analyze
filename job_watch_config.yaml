@@ -1,0 +1,179 @@
+# Job Watch Configuration Example
+# Copy this file to job_watch_config.yaml and edit it to match your preferences.
+# This file serves as the single source of truth for the daily job monitor MVP.
+
+# -----------------------------------------------------------------------------
+# Target Roles
+# -----------------------------------------------------------------------------
+# Define the exact job titles you are looking for.
+target_roles:
+  - "AI Engineer"
+  - "Forward Deployed Engineer"
+  - "Product Designer"
+  - "Frontend Engineer"
+
+# Define aliases for your target roles to cast a wider net while keeping matches
+# categorized under your primary target roles.
+role_aliases:
+  "AI Engineer":
+    - "Applied AI Engineer"
+    - "Generative AI Engineer"
+  "Forward Deployed Engineer":
+    - "Forward Deployed Software Engineer"
+    - "Forward Deployed AI Engineer"
+    - "Deployment Strategist"
+    - "Solutions Engineer"
+    - "AI Solutions Engineer"
+  "Product Designer":
+    - "UX Designer"
+    - "Product Design"
+    - "Interaction Designer"
+  "UX Engineer":
+    - "Design Engineer"
+    - "Frontend UX Engineer"
+    - "UI Engineer"
+  "Frontend Engineer":
+    - "Frontend Developer"
+    - "Front End Engineer"
+    - "React Engineer"
+
+# -----------------------------------------------------------------------------
+# Locations
+# -----------------------------------------------------------------------------
+# Define your target locations.
+locations:
+  - "New York, NY"
+  - "New Jersey"
+
+# Define aliases for your target locations.
+location_aliases:
+  "New York, NY":
+    - "New York"
+    - "NYC"
+    - "Manhattan"
+    - "Brooklyn"
+  "New Jersey":
+    - "Jersey City"
+    - "Hoboken"
+    - "Newark"
+    - "Princeton"
+
+# -----------------------------------------------------------------------------
+# Company Preferences
+# -----------------------------------------------------------------------------
+# Jobs at these companies will get a score boost (+20) and appear at the top.
+preferred_companies:
+  - "OpenAI"
+  - "Anthropic"
+  - "Perplexity"
+  - "Palantir"
+  - "Databricks"
+  - "Figma"
+  - "Notion"
+  - "Meta"
+  - "Google"
+  - "Netflix"
+  - "Amazon"
+  - "Adobe"
+  - "Airbnb"
+  - "Uber"
+  - "Spotify"
+
+# Jobs from these companies will be entirely excluded from the report.
+exclude_companies:
+  - "Revature"
+  - "Dice"
+
+# -----------------------------------------------------------------------------
+# Keyword Filters
+# -----------------------------------------------------------------------------
+# Finding these keywords in the job title or description adds a score boost (+5 each).
+include_keywords:
+  - "AI"
+  - "LLM"
+  - "machine learning"
+  - "generative AI"
+  - "product design"
+  - "design systems"
+  - "Figma"
+  - "React"
+  - "TypeScript"
+  - "frontend"
+  - "prototype"
+  - "human-centered"
+  - "user experience"
+
+# Finding ANY of these keywords in the job title or description will exclude the job.
+exclude_keywords:
+  - "Senior Director"
+  - "Director"
+  - "VP"
+  - "Principal"
+  - "Staff"
+  - "10+ years"
+  - "12+ years"
+  - "Security Clearance"
+  - "US Citizen required"
+
+# -----------------------------------------------------------------------------
+# Match Preferences
+# -----------------------------------------------------------------------------
+preferences:
+  remote:
+    include_remote: true
+    include_hybrid: true
+    include_onsite: true
+  seniority:
+    include_internship: false
+    include_entry_level: true
+    include_mid_level: true
+    include_senior: false
+  # Jobs scoring below this threshold will be excluded from the final report.
+  # Target role match = +30, Target location match = +20
+  minimum_match_score: 40
+  # Maximum number of jobs to include in the generated report.
+  max_jobs_in_report: 50
+
+# -----------------------------------------------------------------------------
+# Scraping Configuration
+# -----------------------------------------------------------------------------
+scrape:
+  sites:
+    - "linkedin"
+  # Target number of results per role+location pair to fetch from the provider.
+  results_wanted: 30
+  # Only fetch jobs posted within the last N hours.
+  hours_old: 24
+  # If true, skips records where the job description cannot be fetched.
+  require_description: true
+
+# -----------------------------------------------------------------------------
+# Output Reporting
+# -----------------------------------------------------------------------------
+report:
+  # Output directory relative to the repository root.
+  output_dir: "reports/daily"
+  # Format of the report. Currently 'markdown' is supported.
+  format: "markdown"
+
+# -----------------------------------------------------------------------------
+# Email Configuration (Optional)
+# -----------------------------------------------------------------------------
+email:
+  enabled: false
+  smtp_host: "smtp.gmail.com"
+  smtp_port: 587
+  smtp_user: ""  # Leave blank to use JOBWATCH_EMAIL_USER env var
+  sender_email: ""
+  recipient_email: ""
+  subject_prefix: "Daily Job Watch Report"
+
+# -----------------------------------------------------------------------------
+# AI Summary Configuration (Optional)
+# -----------------------------------------------------------------------------
+ai_summary:
+  enabled: false
+  provider: "openai"
+  model: "gpt-4o-mini"
+  # Maximum number of top jobs to send to the AI for summarization.
+  max_jobs: 20

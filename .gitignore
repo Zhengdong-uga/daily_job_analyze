@@ -1,0 +1,72 @@
+# Node
+node_modules/
+
+# Python virtual environments
+.venv/
+venv/
+env/
+ENV/
+*.egg-info/
+dist/
+build/
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Testing
+.pytest_cache/
+.hypothesis/
+.coverage
+htmlcov/
+*.cover
+.tox/
+
+# Environment files
+.env
+.env.*
+
+# Obsidian workspace/cache
+.obsidian/
+.obsidian/plugins/
+.obsidian/workspace
+.obsidian/workspace.json
+.obsidian/cache
+
+# Local editor settings
+.vscode/
+
+# macOS clutter
+.DS_Store
+
+# Logs
+*.log
+
+# Build/output artifacts
+*.aux
+*.out
+*.synctex.gz
+*.pdf
+
+# MCP binaries
+mcp-server/kaka-job-scout
+mcp-server/mcp-server
+mcp-server-python/mcp-config.json
+
+# Resume exports
+resume/
+resume.*
+data/applications/**/resume.pdf
+data/applications/**/cover-letter.pdf
+
+# Sensitive data (PII / private content)
+data/capture/
+data/capture/jobs.db
+data/applications/
+data/templates/full_resume.md
+data/templates/resume_skeleton.tex
+trackers/*.md
+!trackers/template.md
+!trackers/job-application.md
