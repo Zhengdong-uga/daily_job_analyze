@@ -156,6 +156,30 @@ export JOBWORKFLOW_LOG_FILE=logs/mcp-server.log
 
 See `.env.example` and `mcp-server-python/mcp-config-example.json` for templates.
 
+## Daily Job Intelligence Report
+
+In addition to the MCP server, JobWorkFlow includes a self-contained daily reporting pipeline that can run on a schedule (e.g., via cron or Windows Task Scheduler).
+
+This pipeline will:
+1. Scrape jobs based on your configured roles and locations.
+2. Filter and rank jobs based on keywords and company preferences.
+3. Generate a Markdown report.
+4. Render the report into **Gmail-compatible HTML**.
+5. Email the report (and attach the Markdown) to multiple recipients.
+
+To run it:
+
+```bash
+python scripts/run_daily_job_watch.py --config job_watch_config.yaml --send-email
+```
+
+Or use the provided Windows helper script:
+```cmd
+run_daily_job_watch.cmd
+```
+
+Configure your email settings in `job_watch_config.yaml` (see `job_watch_config.example.yaml` for options).
+
 ## MCP Tool Reference (Summary)
 
 ### `scrape_jobs`
