@@ -25,6 +25,16 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+ai-gemini = [
+    "google-genai>=1.0.0",
+]
+ai-openai = [
+    "openai>=1.0.0",
+]
+ai = [
+    "google-genai>=1.0.0",
+    "openai>=1.0.0",
+]
 dev = [
     "pre-commit>=4.1.0",
     "pytest>=8.0.0",

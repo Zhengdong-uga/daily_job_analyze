@@ -111,6 +111,45 @@ def build_email_subject(
     return base
 
 
+def build_incremental_email_subject(
+    report_date: date,
+    new_count: int,
+    updated_count: int,
+    subject_prefix: str = "Job Intelligence Report",
+) -> str:
+    """
+    Build an incremental email subject showing new/updated counts.
+
+    Examples:
+        "Job Intelligence Report — 2026-06-13 — 18 new, 4 updated"
+        "Job Intelligence Report — 2026-06-13 — No new jobs"
+    """
+    date_str = report_date.strftime("%Y-%m-%d")
+
+    if new_count == 0 and updated_count == 0:
+        return f"{subject_prefix} — {date_str} — No new jobs"
+
+    parts = []
+    if new_count > 0:
+        parts.append(f"{new_count} new")
+    if updated_count > 0:
+        parts.append(f"{updated_count} updated")
+
+    return f"{subject_prefix} — {date_str} — {', '.join(parts)}"
+
+
+def build_zero_new_email_body() -> str:
+    """
+    Return a short email body for when there are no new or updated jobs.
+    """
+    return (
+        "No new or materially updated matching jobs were found "
+        "since the previous successful run.\n\n"
+        "Run the pipeline again later or expand the scrape window "
+        "with --hours-old to check a wider time range."
+    )
+
+
 def validate_email_settings(
     config_email: Any,
     env: Dict[str, str] = os.environ,

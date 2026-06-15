@@ -71,6 +71,44 @@ class AiSummaryConfig:
 
 
 @dataclass
+class AnalysisScopeConfig:
+    market_snapshot_source: str = "all_current_matched"
+    include_cached_ai_results: bool = True
+    include_rule_fallback_results: bool = True
+    detailed_current_jobs_limit: int = 20
+
+
+@dataclass
+class AiAnalysisConfig:
+    """Configuration for incremental AI job analysis."""
+    enabled: Optional[bool] = None
+    provider: str = "gemini"
+    model: str = "gemini-2.5-flash"
+    extraction_model: str = ""
+    synthesis_model: str = ""
+    fallback_to_rules: bool = True
+    analyze_new_jobs: bool = True
+    analyze_updated_jobs: bool = True
+    analyze_unchanged_jobs: bool = False
+    aggregate_include_all_current_jobs: bool = True
+    use_cached_unchanged_analyses: bool = True
+    bootstrap_uncached_jobs: bool = True
+    max_uncached_jobs_per_run: int = 10
+    generate_comparative_summary: bool = True
+    max_jobs_per_run: int = 30
+    max_description_chars: int = 12000
+    cache_results: bool = True
+    temperature: float = 0.2
+
+
+@dataclass
+class TrendAnalysisConfig:
+    min_current_jobs: int = 5
+    min_previous_jobs: int = 5
+    min_percentage_point_change: float = 10.0
+
+
+@dataclass
 class AnalysisConfig:
     enabled: bool = True
     dedupe_by_url: bool = True
@@ -80,6 +118,7 @@ class AnalysisConfig:
     top_keywords_limit: int = 30
     max_examples_per_keyword: int = 3
     max_examples_per_trend: int = 5
+    trend_analysis: TrendAnalysisConfig = field(default_factory=TrendAnalysisConfig)
 
 
 @dataclass
@@ -97,6 +136,8 @@ class JobWatchConfig:
     report: ReportConfig = field(default_factory=ReportConfig)
     email: EmailConfig = field(default_factory=EmailConfig)
     ai_summary: AiSummaryConfig = field(default_factory=AiSummaryConfig)
+    ai_analysis: AiAnalysisConfig = field(default_factory=AiAnalysisConfig)
+    analysis_scope: AnalysisScopeConfig = field(default_factory=AnalysisScopeConfig)
     analysis: AnalysisConfig = field(default_factory=AnalysisConfig)
     keyword_groups: Dict[str, List[str]] = field(default_factory=dict)
 
@@ -211,8 +252,45 @@ def load_config(config_path: Path) -> JobWatchConfig:
         model=ai_data.get("model", "gpt-4o-mini"),
         max_jobs=ai_data.get("max_jobs", 20),
     )
+
+    # New ai_analysis config (falls back to ai_summary for backward compat)
+    ai_analysis_data = data.get("ai_analysis", {})
+    ai_analysis = AiAnalysisConfig(
+        enabled=ai_analysis_data.get("enabled", None),
+        provider=ai_analysis_data.get("provider", "gemini"),
+        model=ai_analysis_data.get("model", "gemini-2.5-flash"),
+        extraction_model=ai_analysis_data.get("extraction_model", ""),
+        synthesis_model=ai_analysis_data.get("synthesis_model", ""),
+        fallback_to_rules=ai_analysis_data.get("fallback_to_rules", True),
+        analyze_new_jobs=ai_analysis_data.get("analyze_new_jobs", True),
+        analyze_updated_jobs=ai_analysis_data.get("analyze_updated_jobs", True),
+        analyze_unchanged_jobs=ai_analysis_data.get("analyze_unchanged_jobs", False),
+        aggregate_include_all_current_jobs=ai_analysis_data.get("aggregate_include_all_current_jobs", True),
+        use_cached_unchanged_analyses=ai_analysis_data.get("use_cached_unchanged_analyses", True),
+        bootstrap_uncached_jobs=ai_analysis_data.get("bootstrap_uncached_jobs", True),
+        max_uncached_jobs_per_run=ai_analysis_data.get("max_uncached_jobs_per_run", 10),
+        generate_comparative_summary=ai_analysis_data.get("generate_comparative_summary", True),
+        max_jobs_per_run=ai_analysis_data.get("max_jobs_per_run", 30),
+        max_description_chars=ai_analysis_data.get("max_description_chars", 12000),
+        cache_results=ai_analysis_data.get("cache_results", True),
+        temperature=ai_analysis_data.get("temperature", 0.2),
+    )
+    
+    scope_data = data.get("analysis_scope", {})
+    analysis_scope = AnalysisScopeConfig(
+        market_snapshot_source=scope_data.get("market_snapshot_source", "all_current_matched"),
+        include_cached_ai_results=scope_data.get("include_cached_ai_results", True),
+        include_rule_fallback_results=scope_data.get("include_rule_fallback_results", True),
+        detailed_current_jobs_limit=scope_data.get("detailed_current_jobs_limit", 20),
+    )
     
     analysis_data = data.get("analysis", {})
+    trend_data = analysis_data.get("trend_analysis", {})
+    trend_analysis = TrendAnalysisConfig(
+        min_current_jobs=trend_data.get("min_current_jobs", 5),
+        min_previous_jobs=trend_data.get("min_previous_jobs", 5),
+        min_percentage_point_change=trend_data.get("min_percentage_point_change", 10.0),
+    )
     analysis = AnalysisConfig(
         enabled=analysis_data.get("enabled", True),
         dedupe_by_url=analysis_data.get("dedupe_by_url", True),
@@ -222,6 +300,7 @@ def load_config(config_path: Path) -> JobWatchConfig:
         top_keywords_limit=analysis_data.get("top_keywords_limit", 30),
         max_examples_per_keyword=analysis_data.get("max_examples_per_keyword", 3),
         max_examples_per_trend=analysis_data.get("max_examples_per_trend", 5),
+        trend_analysis=trend_analysis,
     )
 
     return JobWatchConfig(
@@ -238,6 +317,8 @@ def load_config(config_path: Path) -> JobWatchConfig:
         report=report,
         email=email,
         ai_summary=ai_summary,
+        ai_analysis=ai_analysis,
+        analysis_scope=analysis_scope,
         analysis=analysis,
         keyword_groups=_parse_dict_of_lists(data, "keyword_groups"),
     )
