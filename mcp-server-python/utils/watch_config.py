@@ -32,6 +32,7 @@ class PreferencesConfig:
     include_senior: bool = False
     minimum_match_score: int = 40
     max_jobs_in_report: int = 50
+    max_years_of_experience: int | None = None
 
 
 @dataclass
@@ -46,6 +47,12 @@ class ScrapeConfig:
 class ReportConfig:
     output_dir: str = "reports/daily"
     format: str = "markdown"
+    evidence_examples_per_insight: int = 3
+    include_evidence_appendix: bool = True
+    collapsible_evidence_in_markdown: bool = True
+    max_executive_words: int = 250
+    max_pattern_words: int = 150
+    include_role_history_changes: bool = False
 
 
 @dataclass
@@ -75,7 +82,8 @@ class AnalysisScopeConfig:
     market_snapshot_source: str = "all_current_matched"
     include_cached_ai_results: bool = True
     include_rule_fallback_results: bool = True
-    detailed_current_jobs_limit: int = 20
+    detailed_current_jobs_limit: int = 15
+    include_all_current_jobs: bool = True
 
 
 @dataclass
@@ -192,9 +200,27 @@ def load_config(config_path: Path) -> JobWatchConfig:
         raise ConfigValidationError(f"Configuration file {config_path} is empty or not a mapping")
         
     # Required fields
-    target_roles = _parse_list(data, "target_roles")
-    if not target_roles:
+    target_roles_data = data.get("target_roles")
+    if not target_roles_data or not isinstance(target_roles_data, list):
         raise ConfigValidationError("'target_roles' is required and must not be empty")
+        
+    role_aliases = _parse_dict_of_lists(data, "role_aliases")
+    target_roles = []
+    for item in target_roles_data:
+        if isinstance(item, str):
+            target_roles.append(item)
+        elif isinstance(item, dict):
+            name = item.get("name")
+            if not name or not isinstance(name, str):
+                raise ConfigValidationError("Target role dict must have a string 'name' field")
+            target_roles.append(name)
+            aliases = item.get("aliases")
+            if aliases and isinstance(aliases, list):
+                if name not in role_aliases:
+                    role_aliases[name] = []
+                role_aliases[name].extend([str(a) for a in aliases])
+        else:
+            raise ConfigValidationError("Target role must be a string or a dictionary")
         
     locations = _parse_list(data, "locations")
     if not locations:
@@ -229,6 +255,12 @@ def load_config(config_path: Path) -> JobWatchConfig:
     report = ReportConfig(
         output_dir=report_data.get("output_dir", "reports/daily"),
         format=report_data.get("format", "markdown"),
+        evidence_examples_per_insight=report_data.get("evidence_examples_per_insight", 3),
+        include_evidence_appendix=report_data.get("include_evidence_appendix", True),
+        collapsible_evidence_in_markdown=report_data.get("collapsible_evidence_in_markdown", True),
+        max_executive_words=report_data.get("max_executive_words", 250),
+        max_pattern_words=report_data.get("max_pattern_words", 150),
+        include_role_history_changes=report_data.get("include_role_history_changes", False),
     )
     
     email_data = data.get("email", {})
@@ -281,7 +313,8 @@ def load_config(config_path: Path) -> JobWatchConfig:
         market_snapshot_source=scope_data.get("market_snapshot_source", "all_current_matched"),
         include_cached_ai_results=scope_data.get("include_cached_ai_results", True),
         include_rule_fallback_results=scope_data.get("include_rule_fallback_results", True),
-        detailed_current_jobs_limit=scope_data.get("detailed_current_jobs_limit", 20),
+        detailed_current_jobs_limit=scope_data.get("detailed_current_jobs_limit", 15),
+        include_all_current_jobs=scope_data.get("include_all_current_jobs", True),
     )
     
     analysis_data = data.get("analysis", {})
@@ -306,7 +339,7 @@ def load_config(config_path: Path) -> JobWatchConfig:
     return JobWatchConfig(
         target_roles=target_roles,
         locations=locations,
-        role_aliases=_parse_dict_of_lists(data, "role_aliases"),
+        role_aliases=role_aliases,
         location_aliases=_parse_dict_of_lists(data, "location_aliases"),
         preferred_companies=_parse_list(data, "preferred_companies"),
         exclude_companies=_parse_list(data, "exclude_companies"),

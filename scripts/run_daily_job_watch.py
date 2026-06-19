@@ -21,7 +21,6 @@ sys.path.insert(0, str(repo_root / "mcp-server-python"))
 from db.jobs_ingest_writer import JobsIngestWriter
 from db.jobs_reader import get_connection, query_recent_jobs
 from db.job_history_db import (
-    bootstrap_history_schema,
     classify_jobs,
     get_history_connection,
     get_previous_successful_run,
@@ -36,7 +35,6 @@ from db.job_history_db import (
     update_run_job_ai_status,
     update_run_job_report_status,
     update_run_ai_status,
-    update_run_email_status,
 )
 from utils.ai_cache import (
     bootstrap_cache_schema, 
@@ -47,9 +45,8 @@ from utils.ai_cache import (
     store_cached_market_summary,
 )
 from utils.job_filter import filter_and_rank_jobs
-from utils.path_resolution import get_repo_root, resolve_repo_relative_path
+from utils.path_resolution import resolve_repo_relative_path
 from utils.report_generator import (
-    generate_markdown_report,
     generate_incremental_report,
     write_daily_report,
     compute_skill_trends,
@@ -58,7 +55,6 @@ from utils.scrape_normalizer import normalize_and_filter, serialize_payload
 from utils.watch_config import ConfigValidationError, load_config
 from utils.jd_analyzer import summarize_job_description, extract_job_requirements
 from utils.email_sender import (
-    build_email_subject,
     build_incremental_email_subject,
     build_zero_new_email_body,
     validate_email_settings,
@@ -219,6 +215,87 @@ def _resolve_ai_provider(args, config):
         return NoOpProvider(), PROMPT_VERSION
 
 
+
+def normalize_market_summary(summary: dict) -> dict:
+    if not isinstance(summary, dict):
+        return {}
+    if "market_snapshot" not in summary:
+        summary["market_snapshot"] = {}
+    return summary
+
+def is_valid_market_summary(summary: dict, source: str = "unknown") -> bool:
+    import logging
+    import json
+    
+    if not isinstance(summary, dict) or not summary:
+        return False
+        
+    missing = []
+    
+    if "configured_roles" not in summary:
+        missing.append("configured_roles")
+        
+    role_analyses = summary.get("role_analyses", {})
+    if not role_analyses or not isinstance(role_analyses, dict):
+        missing.append("role_analyses (missing or empty)")
+    else:
+        for role, data in role_analyses.items():
+            if not isinstance(data, dict):
+                missing.append(f"role_analyses.{role} (invalid structure)")
+                continue
+                
+            if data.get("job_count", 0) < 0:
+                missing.append(f"role_analyses.{role}.job_count")
+            
+            if not data.get("responsibility_frequencies"):
+                missing.append(f"role_analyses.{role}.responsibility_frequencies")
+                
+            if not data.get("role_specific_insights"):
+                missing.append(f"role_analyses.{role}.role_specific_insights")
+                
+            # Check at least one type of recommendation exists
+            recs = [
+                data.get("case_study_recommendations"),
+                data.get("portfolio_recommendations"),
+                data.get("resume_keywords"),
+                data.get("resume_actions"),
+                data.get("linkedin_actions")
+            ]
+            if not any(r and len(r) > 0 for r in recs):
+                missing.append(f"role_analyses.{role}.recommendations (all missing)")
+                
+    summary_str = json.dumps(summary).lower()
+    prohibited = [
+        "fallback insight",
+        "highlight the top required skills",
+        "projects demonstrating the required skills",
+        "candidate with listed skills",
+        "list these skills on linkedin"
+    ]
+    for p in prohibited:
+        if p in summary_str:
+            missing.append(f"prohibited placeholder found: {p}")
+        
+    is_valid = len(missing) == 0
+    
+    val_res = {
+        "valid": is_valid,
+        "missing_or_empty_sections": missing,
+        "top_level_keys": list(summary.keys()) if isinstance(summary, dict) else [],
+        "source": source
+    }
+    
+    try:
+        Path("reports/debug").mkdir(parents=True, exist_ok=True)
+        with open("reports/debug/latest-role-market-intelligence-validation.json", "w", encoding="utf-8") as f:
+            json.dump(val_res, f, indent=2)
+        with open("reports/debug/latest-role-market-intelligence-normalized.json", "w", encoding="utf-8") as f:
+            json.dump(summary, f, indent=2)
+    except Exception as e:
+        logging.warning(f"Could not save validation artifacts: {e}")
+        
+    return is_valid
+
 def run_pipeline():
     args = parse_args()
     setup_logging(args.verbose)
@@ -362,6 +439,14 @@ def run_pipeline():
 
     logging.info(f"Classification: {new_count} new, {updated_count} updated, {unchanged_count} unchanged")
 
+
+    matched_state_count = sum(1 for j in matched_jobs if j.get("match_state") == "matched")
+    ambiguous_state_count = sum(1 for j in matched_jobs if j.get("match_state") == "ambiguous")
+    unmatched_state_count = sum(1 for j in matched_jobs if j.get("match_state") == "unmatched")
+    
+    run_stats["matched_state_count"] = matched_state_count
+    run_stats["ambiguous_state_count"] = ambiguous_state_count
+    run_stats["unmatched_state_count"] = unmatched_state_count
     run_stats["unique_count"] = len(matched_jobs)
     run_stats["new_count"] = new_count
     run_stats["updated_count"] = updated_count
@@ -410,6 +495,58 @@ def run_pipeline():
     if ai_enabled:
         logging.info("Running per-job AI extraction...")
 
+        def first_nonempty_list(analysis, *keys):
+            for k in keys:
+                val = analysis.get(k)
+                if val and isinstance(val, list) and len(val) > 0:
+                    return val
+            return []
+
+        def normalize_analysis_evidence(analysis):
+            return {
+                "required_skills": first_nonempty_list(
+                    analysis,
+                    "required_skills",
+                    "hard_skills",
+                    "must_have_skills",
+                ),
+                "preferred_skills": first_nonempty_list(
+                    analysis,
+                    "preferred_skills",
+                    "nice_to_have_skills",
+                ),
+                "responsibilities": first_nonempty_list(
+                    analysis,
+                    "responsibilities",
+                    "core_responsibilities",
+                    "key_responsibilities",
+                    "job_duties",
+                ),
+                "soft_skills": first_nonempty_list(
+                    analysis,
+                    "soft_skills",
+                    "collaboration_skills",
+                ),
+            }
+
+        def enrich_job_analysis(job, raw_analysis, source):
+            analysis = dict(raw_analysis or {})
+            analysis.update({
+                "_stable_identity": job.get("_stable_identity"),
+                "job_id": job.get("job_id"),
+                "original_job_title": job.get("title"),
+                "company": job.get("company"),
+                "location": job.get("location"),
+                "url": job.get("url"),
+                "matched_target_role": job.get("matched_target_role"),
+                "match_state": job.get("match_state", "matched"),
+                "role_match_reason": job.get("role_match_reason"),
+                "role_match_confidence": job.get("role_match_confidence"),
+                "secondary_matched_roles": job.get("secondary_matched_roles", []),
+                "analysis_source": source,
+            })
+            return analysis
+
         def _get_rule_based_fallback(job):
             kw_groups = getattr(config, "keyword_groups", {})
             summary = summarize_job_description(job, kw_groups)
@@ -418,7 +555,9 @@ def run_pipeline():
                 "summary": summary,
                 "required_skills": reqs["hard_skills"],
                 "soft_skills": reqs["soft_skills"],
-                "role_cluster": job.get("matched_role", "Unknown"),
+                "responsibilities": reqs.get("responsibilities", []),
+                "role_cluster": job.get("matched_target_role", "Unknown"),
+                "match_state": job.get("match_state", "unmatched")
             }
 
         def process_job_for_extraction(job, allow_api_call: bool):
@@ -434,7 +573,7 @@ def run_pipeline():
                     prompt_version, "job_analysis"
                 )
                 if cached:
-                    ai_job_analyses[identity] = cached
+                    ai_job_analyses[identity] = enrich_job_analysis(job, cached, "cache")
                     update_analysis_status(
                         history_conn, identity, "cached",
                         ai_provider.provider_name, ai_provider.extraction_model, prompt_version
@@ -450,7 +589,7 @@ def run_pipeline():
                     job, max_description_chars=config.ai_analysis.max_description_chars
                 )
                 if result:
-                    ai_job_analyses[identity] = result
+                    ai_job_analyses[identity] = enrich_job_analysis(job, result, "fresh")
                     extraction_calls += 1
                     ai_analyzed_count += 1
                     update_analysis_status(
@@ -471,7 +610,11 @@ def run_pipeline():
             
             # If API not allowed, failed, or budget exceeded, use fallback if configured
             if config.analysis_scope.include_rule_fallback_results:
-                ai_job_analyses[identity] = _get_rule_based_fallback(job)
+                ai_job_analyses[identity] = enrich_job_analysis(
+                    job,
+                    _get_rule_based_fallback(job),
+                    "rule",
+                )
                 fallback_count += 1
                 logging.debug(f"  Rule fallback for: {job.get('title', '')} @ {job.get('company', '')}")
                 return True
@@ -522,7 +665,7 @@ def run_pipeline():
         logging.info(f"Extraction complete: {extraction_calls} API calls, {cache_hits} cache hits, {fallback_count} rule fallbacks.")
 
         # Generate comparative market summary
-        if config.ai_analysis.generate_comparative_summary and ai_job_analyses:
+        if config.ai_analysis.generate_comparative_summary and len(matched_jobs) > 0:
             logging.info("Generating current market snapshot synthesis...")
             run_metrics = {
                 "new_count": new_count,
@@ -534,8 +677,26 @@ def run_pipeline():
             }
             
             # Use all available job extractions
-            current_analyses_list = list(ai_job_analyses.values())
+
+            current_analyses_list = []
+            for k, analysis in ai_job_analyses.items():
+                if analysis.get("match_state") != "unmatched" and analysis.get("matched_target_role"):
+                    current_analyses_list.append(analysis)
+                else:
+                    logging.info(f"Filtering out {k} from current_analyses_list. match_state: {analysis.get('match_state')}, matched_target_role: {analysis.get('matched_target_role')}")
             
+            logging.info(f"Classified matched jobs: {len(matched_jobs)}")
+            logging.info(f"Fresh analyses: {extraction_calls}")
+            logging.info(f"Cached analyses: {cache_hits}")
+            logging.info(f"Rule fallbacks: {fallback_count}")
+            logging.info(f"Total analysis objects: {len(ai_job_analyses)}")
+            logging.info(f"Structured synthesis input: {len(current_analyses_list)}")
+
+            expected = extraction_calls + cache_hits + fallback_count
+            actual = len(current_analyses_list)
+            if actual != expected:
+                logging.warning(f"Invariant failure: expected {expected} synthesis inputs, got {actual}")
+                
             # Check market summary cache
             agg_hash = compute_aggregate_input_hash(
                 run_metrics=run_metrics,
@@ -544,30 +705,160 @@ def run_pipeline():
                 update_analyses=[],
             )
             
+            logging.info(f"Aggregate synthesis cache key: {agg_hash}")
             cached_summary = None
             if config.ai_analysis.cache_results and not args.reanalyze_all:
                 cached_summary = get_cached_market_summary(
                     history_conn, agg_hash, ai_provider.provider_name, ai_provider.synthesis_model, prompt_version
                 )
             
+            is_cache_valid = False
             if cached_summary:
-                ai_market_summary = cached_summary
-                logging.info("Market synthesis retrieved from cache.")
+                logging.info("Aggregate synthesis cache hit: yes")
+                logging.info(f"Cached summary top-level keys: {list(cached_summary.keys()) if isinstance(cached_summary, dict) else []}")
+                norm_cache = normalize_market_summary(cached_summary)
+                if is_valid_market_summary(norm_cache, source="aggregate_cache"):
+                    logging.info("Cached summary validation: valid")
+                    ai_market_summary = norm_cache
+                    is_cache_valid = True
+                else:
+                    logging.info("Cached summary validation: invalid")
+                    logging.info("Invalid cache reason: Failed is_valid_market_summary checks (missing major sections)")
             else:
-                ai_market_summary = ai_provider.generate_market_summary(
-                    run_metrics=run_metrics,
-                    previous_metrics=previous_run,
-                    current_analyses=current_analyses_list,
-                )
-                if ai_market_summary:
-                    logging.info("Market synthesis generated successfully.")
+                logging.info("Aggregate synthesis cache hit: no")
+                
+            if not is_cache_valid:
+                logging.info("Aggregate synthesis API call required: yes")
+                
+                if current_analyses_list:
+                    logging.info(f"Passing {len(current_analyses_list)} structured jobs to synthesis")
+                    fresh_summary = ai_provider.generate_market_summary(
+                        run_metrics=run_metrics,
+                        previous_metrics=previous_run,
+                        current_analyses=current_analyses_list,
+                        configured_roles=config.target_roles,
+                    )
+                    logging.info(f"Aggregate synthesis result keys: {list(fresh_summary.keys()) if isinstance(fresh_summary, dict) else []}")
+                else:
+                    if len(matched_jobs) > 0:
+                        logging.error("High-severity data-flow error: matched jobs exist but current_analyses_list is empty. Bypassing Gemini API.")
+                    fresh_summary = {}
+                
+                try:
+                    import json
+                    Path("reports/debug").mkdir(parents=True, exist_ok=True)
+                    with open("reports/debug/latest-market-synthesis-fresh.json", "w", encoding="utf-8") as f:
+                        json.dump(fresh_summary, f, indent=2)
+                except Exception as e:
+                    logging.warning(f"Could not save fresh synthesis artifact: {e}")
+                    
+                norm_fresh = normalize_market_summary(fresh_summary)
+                if is_valid_market_summary(norm_fresh, source="gemini"):
+                    logging.info("Aggregate synthesis validation: valid")
+                    ai_market_summary = norm_fresh
                     if config.ai_analysis.cache_results:
                         store_cached_market_summary(
                             history_conn, agg_hash, ai_provider.provider_name, 
                             ai_provider.synthesis_model, prompt_version, ai_market_summary
                         )
                 else:
-                    logging.warning("Market synthesis generation returned empty results.")
+                    logging.info("Aggregate synthesis validation: invalid")
+                    logging.warning("Market synthesis generation returned empty or invalid results. Will not cache.")
+                    ai_market_summary = norm_fresh
+                    
+                    # Deterministic fallback when API fails or quota exceeded
+                    if current_analyses_list or len(ai_job_analyses) > 0:
+                        # Ensure we always use any enriched analyses available for the fallback
+                        fallback_analyses = current_analyses_list if current_analyses_list else list(ai_job_analyses.values())
+                        logging.info("Generating deterministic fallback synthesis from per-job AI results.")
+                        from collections import Counter
+                        role_analyses = {}
+                        
+                        configured_roles = config.target_roles
+                        for role in configured_roles:
+                            role_jobs = [jd for jd in fallback_analyses if jd.get("matched_target_role") == role or jd.get("role_cluster") == role or jd.get("matched_role") == role]
+                            if not role_jobs:
+                                continue
+                                
+                            req_counter = Counter()
+                            pref_counter = Counter()
+                            resp_counter = Counter()
+                            
+                            for jd in role_jobs:
+                                norm = normalize_analysis_evidence(jd)
+                                reqs = norm["required_skills"]
+                                prefs = norm["preferred_skills"]
+                                resps = norm["responsibilities"]
+                                
+                                for req in reqs:
+                                    req_counter[req] += 1
+                                for pref in prefs:
+                                    pref_counter[pref] += 1
+                                for r in resps:
+                                    resp_counter[r] += 1
+                                
+                            total_role_jobs = len(role_jobs)
+                            
+                            top_reqs = [s for s, c in req_counter.most_common(3)]
+                            top_resps = [r for r, c in resp_counter.most_common(2)]
+                            
+                            insight_list = []
+                            if req_counter:
+                                top_req, count = req_counter.most_common(1)[0]
+                                insight_list.append(f"{top_req} is explicitly required in {count} of {total_role_jobs} jobs ({int(count/total_role_jobs*100)}%).")
+                                if len(req_counter) > 1:
+                                    second_req, second_count = req_counter.most_common(2)[1]
+                                    insight_list.append(f"{second_req} appears in {second_count} of {total_role_jobs} jobs ({int(second_count/total_role_jobs*100)}%).")
+                            if resp_counter:
+                                top_resp, count = resp_counter.most_common(1)[0]
+                                insight_list.append(f"{top_resp} appears in {count} of {total_role_jobs} {role} jobs ({int(count/total_role_jobs*100)}%).")
+
+                            evidence_skills_str = ", ".join(top_reqs) if top_reqs else "core technical skills"
+                            evidence_resps_str = ", ".join(top_resps) if top_resps else "key operational workflows"
+                            
+                            if role == "Data Scientist" and top_reqs:
+                                case_study = f"Create a case study that starts with a business question, prepares data using {evidence_skills_str}, compares predictive approaches, evaluates model performance, and presents an executive-facing recommendation."
+                            elif role == "Forward Deployed Engineer" and top_reqs:
+                                case_study = f"Create a customer workflow automation case that documents discovery, solution scoping, implementation with {evidence_skills_str}, external-system integration, and measurable operational impact."
+                            elif role == "AI Engineer" and top_reqs:
+                                case_study = f"Build an end-to-end AI application that includes document ingestion, {evidence_resps_str}, API deployment, monitoring, and utilizes {evidence_skills_str}."
+                            else:
+                                case_study = f"Build an end-to-end case study that demonstrates {evidence_resps_str} and utilizes {evidence_skills_str} to show measurable impact."
+                                
+                            portfolio_rec = f"Create a portfolio project highlighting {evidence_skills_str} applied to real-world {role} challenges."
+                            
+                            role_analyses[role] = {
+                                "job_count": total_role_jobs,
+                                "responsibility_frequencies": [{"responsibility": r, "count": c, "percentage": int(c/total_role_jobs*100), "examples": []} for r, c in resp_counter.most_common(5)],
+                                "required_skill_frequencies": [{"skill": s, "count": c, "percentage": int(c/total_role_jobs*100)} for s, c in req_counter.most_common(8)],
+                                "preferred_skill_frequencies": [{"skill": s, "count": c, "percentage": int(c/total_role_jobs*100)} for s, c in pref_counter.most_common(5)],
+                                "role_specific_insights": insight_list if insight_list else [f"Analyzed {total_role_jobs} active opportunities in the market."],
+                                "ideal_candidate_profile": [f"Candidate showcasing {evidence_skills_str} with experience in {evidence_resps_str}."],
+                                "case_study_recommendations": [case_study],
+                                "portfolio_recommendations": [portfolio_rec],
+                                "resume_keywords": [s for s, c in req_counter.most_common(5)],
+                                "resume_actions": [f"Demonstrate impact in {r}" for r in top_resps] if top_resps else ["Focus on quantifiable achievements"],
+                                "linkedin_actions": [f"Highlight expertise in {s}" for s in top_reqs] if top_reqs else ["Detail your technical stack"]
+                            }
+                            
+                        if not ai_market_summary:
+                            ai_market_summary = {}
+                            
+                        ai_market_summary["configured_roles"] = configured_roles
+                        ai_market_summary["role_analyses"] = role_analyses
+                        ai_market_summary["market_snapshot"] = {"executive_summary": ["Fallback synthesis triggered because AI provider failed."]}
+                        ai_market_summary["cross_role_patterns"] = ["Fallback generated cross-role patterns."]
+                        ai_market_summary["optional_role_changes"] = []
+
+                    try:
+                        import json
+                        with open("reports/debug/latest-role-market-intelligence-final.json", "w", encoding="utf-8") as f:
+                            json.dump(ai_market_summary, f, indent=2)
+                    except Exception as e:
+                        logging.warning(f"Could not save final debug artifact: {e}")
+                        
+            else:
+                logging.info("Aggregate synthesis API call required: no")
 
         # Update run AI status globally
         if ai_analyzed_count > 0 or ai_market_summary:
@@ -640,8 +931,8 @@ def run_pipeline():
             html_report = None
             if email_settings.get("send_html", True):
                 try:
-                    # If no new/updated jobs, use the short body
-                    if new_count == 0 and updated_count == 0:
+                    # If no new/updated jobs and not including all current jobs, use the short body
+                    if new_count == 0 and updated_count == 0 and not getattr(config.analysis_scope, "include_all_current_jobs", False):
                         email_body = build_zero_new_email_body()
                         html_report = markdown_to_email_html(email_body, title=subject)
                     else:
@@ -659,9 +950,9 @@ def run_pipeline():
                 if new_count > 0 or updated_count > 0:
                     attachment_paths.append(report_path)
 
-            # Use short plain text for zero-new runs
+            # Use short plain text for zero-new runs if not including all current jobs
             plain_text = markdown_report
-            if new_count == 0 and updated_count == 0:
+            if new_count == 0 and updated_count == 0 and not getattr(config.analysis_scope, "include_all_current_jobs", False):
                 plain_text = build_zero_new_email_body()
 
             recipients = email_settings["recipients"]

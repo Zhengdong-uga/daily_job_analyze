@@ -3,6 +3,15 @@ from datetime import date
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+def _truncate_words(text: str, num_words: int) -> str:
+    """Truncate text to a maximum number of words."""
+    if not isinstance(text, str):
+        return ""
+    words = text.split()
+    if len(words) <= num_words:
+        return text
+    return " ".join(words[:num_words]) + "..."
+
 from utils.watch_config import JobWatchConfig
 from utils.jd_analyzer import (
     extract_keyword_counts,
@@ -34,7 +43,7 @@ def _format_job_compact(job: Dict[str, Any], keyword_groups: Optional[Dict[str, 
         f"- **Location:** {location} | **Source:** {source}",
         f"- **Matched Role:** {matched_role} | **Keywords:** {matched_keywords}",
         "",
-        f"**Summary:**",
+        "**Summary:**",
         summary,
         ""
     ]
@@ -371,6 +380,47 @@ def _format_updated_job_card(job: Dict[str, Any], change_analysis: Optional[Dict
     return "\n".join(lines)
 
 
+def _normalize_text(text: str) -> str:
+    import string
+    return text.lower().translate(str.maketrans('', '', string.punctuation)).strip()
+
+def _deduplicate_insights(summary: dict) -> None:
+    """Deduplicate insights independently within each role. Collect exact matches into cross_role_patterns."""
+    cross_role_tracker = {}
+    
+    if summary.get("role_analyses"):
+        for role, data in summary["role_analyses"].items():
+            seen_in_role = set()
+            
+            for key in ["role_specific_insights", "ideal_candidate_profile", "case_study_recommendations", "portfolio_recommendations", "resume_actions", "linkedin_actions"]:
+                if key in data and isinstance(data[key], list):
+                    deduped = []
+                    for item in data[key]:
+                        if not isinstance(item, str): continue
+                        norm = _normalize_text(item)
+                        if not norm: continue
+                        if norm not in seen_in_role:
+                            seen_in_role.add(norm)
+                            deduped.append(item)
+                            
+                            if norm not in cross_role_tracker:
+                                cross_role_tracker[norm] = {"count": 1, "original": item, "roles": [role]}
+                            else:
+                                cross_role_tracker[norm]["count"] += 1
+                                cross_role_tracker[norm]["roles"].append(role)
+                    data[key] = deduped
+
+    # Generate cross-role patterns if an insight appeared in > 1 role
+    if "cross_role_patterns" not in summary:
+        summary["cross_role_patterns"] = []
+    
+    for norm, info in cross_role_tracker.items():
+        if info["count"] > 1:
+            roles_str = ", ".join(info["roles"])
+            pattern = f"{info['original']} (Seen in: {roles_str})"
+            if pattern not in summary["cross_role_patterns"]:
+                summary["cross_role_patterns"].append(pattern)
+
 def generate_incremental_report(
     classified_jobs: Dict[str, List[Dict[str, Any]]],
     run_stats: Dict[str, Any],
@@ -379,7 +429,7 @@ def generate_incremental_report(
     ai_job_analyses: Optional[Dict[str, Dict[str, Any]]] = None,
     ai_update_analyses: Optional[Dict[str, Dict[str, Any]]] = None,
     ai_market_summary: Optional[Dict[str, Any]] = None,
-    include_previously_seen: bool = False,
+    include_previously_seen: bool = True,
 ) -> str:
     """
     Generate the incremental Job Intelligence Report using the Current Market Snapshot schema.
@@ -388,22 +438,70 @@ def generate_incremental_report(
     ai_update_analyses = ai_update_analyses or {}
     ai_market_summary = ai_market_summary or {}
 
+    if ai_market_summary:
+        _deduplicate_insights(ai_market_summary)
+
     new_jobs = classified_jobs.get("new", [])
     updated_jobs = classified_jobs.get("updated", [])
     unchanged_jobs = classified_jobs.get("unchanged", [])
+    
+    if getattr(config.analysis_scope, "include_all_current_jobs", False):
+        include_previously_seen = True
 
     today_str = date.today().strftime("%Y-%m-%d")
-    kw_groups = getattr(config, "keyword_groups", None)
-
+    evidence_limit = getattr(config.report, "evidence_examples_per_insight", 3)
+    include_appendix = getattr(config.report, "include_evidence_appendix", True)
+    max_executive_words = getattr(config.report, "max_executive_words", 250)
+    
     lines = [f"# Current Job Market Snapshot — {today_str}", ""]
 
-    # ── Section 1: Executive Market Snapshot ──
-    lines.append("## 1. Executive Market Snapshot")
+    # Table of Contents
+    lines.append("## Table of Contents")
+    lines.append("- [Executive Current Market Snapshot](#1-executive-current-market-snapshot)")
+    
+    roles = ai_market_summary.get("configured_roles", getattr(config, "target_roles", []))
+    for i, role in enumerate(roles, start=2):
+        safe_id = "".join(c if c.isalnum() else "-" for c in role.lower())
+        lines.append(f"- [{role} Intelligence](#{i}-{safe_id}-intelligence)")
+        
+    sec_num = len(roles) + 2
+    lines.append(f"- [Cross-Role Patterns](#{sec_num}-cross-role-patterns)")
+    
+    if getattr(config.report, "include_role_history_changes", False) and ai_market_summary.get("optional_role_changes"):
+        sec_num += 1
+        lines.append(f"- [Notable Changes](#{sec_num}-notable-changes)")
+        
+    sec_num += 1
+    lines.append(f"- [Detailed Current Jobs](#{sec_num}-detailed-current-jobs-grouped-by-role)")
+    
+    if include_appendix:
+        sec_num += 1
+        lines.append(f"- [Evidence Appendix](#{sec_num}-evidence-appendix)")
+        
     lines.append("")
     
-    # Overview Table
-    lines.append(f"| Metric | Value |")
-    lines.append(f"|---|---|")
+    appendix_items = []
+
+    def _process_evidence(evidence_list: List[str], context: str) -> List[str]:
+        if not evidence_list:
+            return []
+        shown = evidence_list[:evidence_limit]
+        overflow = evidence_list[evidence_limit:]
+        result = []
+        for ev in shown:
+            result.append(f"- {ev}")
+        if overflow and include_appendix:
+            appendix_items.append((context, overflow))
+            safe_id = "".join(c if c.isalnum() else "-" for c in context.lower())
+            result.append(f"- *See [Evidence Appendix](#appendix-{safe_id}) for {len(overflow)} more examples.*")
+        return result
+
+    # ── Section 1: Executive Current Market Snapshot ──
+    lines.append("## 1. Executive Current Market Snapshot")
+    lines.append("")
+    
+    lines.append("| Metric | Value |")
+    lines.append("|---|---|")
     lines.append(f"| Scrape window | Last {run_stats.get('scrape_hours_old', '?')} hours |")
     lines.append(f"| Unique jobs analyzed | {run_stats.get('unique_count', 0)} |")
     lines.append(f"| **New jobs** | **{len(new_jobs)}** |")
@@ -413,166 +511,174 @@ def generate_incremental_report(
     lines.append("")
     
     snapshot = ai_market_summary.get("market_snapshot", {})
-    if snapshot:
-        if snapshot.get("executive_summary"):
-            lines.append("### Key Takeaways")
-            for t in snapshot["executive_summary"]:
-                lines.append(f"- {t}")
+    if snapshot and snapshot.get("executive_summary"):
+        for t in snapshot["executive_summary"][:5]:
+            lines.append(f"- {_truncate_words(t, max_executive_words)}")
+        lines.append("")
+
+    # ── Section 2: Role-by-Role Market Intelligence ──
+    role_analyses = ai_market_summary.get("role_analyses", {})
+    
+    for i, role in enumerate(roles, start=2):
+        safe_id = "".join(c if c.isalnum() else "-" for c in role.lower())
+        lines.append(f"## {i}. {role} Intelligence")
+        lines.append("")
+        
+        data = role_analyses.get(role)
+        if not data:
+            lines.append("*No data available for this role in the current window.*")
             lines.append("")
-        if snapshot.get("dominant_hiring_patterns"):
-            lines.append("### Dominant Hiring Patterns")
-            for t in snapshot["dominant_hiring_patterns"]:
-                lines.append(f"- {t}")
+            continue
+            
+        total_role_jobs = data.get('job_count', 0)
+        lines.append(f"**Based on {total_role_jobs} recent jobs.**")
+        lines.append("")
+        
+        if data.get("role_specific_insights"):
+            lines.append("### Snapshot")
+            for insight in data["role_specific_insights"]:
+                lines.append(f"- {insight}")
             lines.append("")
-        if snapshot.get("candidate_profile_employers_want"):
+            
+        if data.get("responsibility_frequencies"):
+            lines.append("### Key Responsibilities")
+            lines.append("| Responsibility | Frequency |")
+            lines.append("|---|---|")
+            for r in data["responsibility_frequencies"][:5]:
+                pct = r.get('percentage', 0)
+                count = r.get('count', 0)
+                lines.append(f"| {r.get('responsibility', '')} | {count} of {total_role_jobs} jobs ({pct}%) |")
+            lines.append("")
+            
+        req_freqs = {s.get("skill", ""): s for s in data.get("required_skill_frequencies", [])}
+        pref_freqs = {s.get("skill", ""): s for s in data.get("preferred_skill_frequencies", [])}
+        
+        if req_freqs or pref_freqs:
+            lines.append("### Required vs Preferred Skills")
+            lines.append("| Skill | Required | Preferred | Mentioned/Unclear | Total Role Jobs |")
+            lines.append("|---|---:|---:|---:|---:|")
+            
+            all_skills = list(set(list(req_freqs.keys()) + list(pref_freqs.keys())))
+            all_skills.sort(key=lambda x: req_freqs.get(x, {}).get("count", 0) + pref_freqs.get(x, {}).get("count", 0), reverse=True)
+            
+            for skill in all_skills[:15]:
+                req_count = req_freqs.get(skill, {}).get("count", 0)
+                req_pct = req_freqs.get(skill, {}).get("percentage", 0)
+                
+                pref_count = pref_freqs.get(skill, {}).get("count", 0)
+                pref_pct = pref_freqs.get(skill, {}).get("percentage", 0)
+                
+                req_str = f"{req_count} of {total_role_jobs} jobs ({req_pct}%)" if req_count else "-"
+                pref_str = f"{pref_count} of {total_role_jobs} jobs ({pref_pct}%)" if pref_count else "-"
+                
+                lines.append(f"| {skill} | {req_str} | {pref_str} | - | {total_role_jobs} |")
+            lines.append("")
+            
+        if data.get("ideal_candidate_profile"):
             lines.append("### Ideal Candidate Profile")
-            for t in snapshot["candidate_profile_employers_want"]:
-                lines.append(f"- {t}")
+            for p in data["ideal_candidate_profile"]:
+                lines.append(f"- {p}")
             lines.append("")
-
-    # ── Section 2: Current Industry and Hiring Trends ──
-    lines.append("## 2. Current Industry and Hiring Trends")
-    lines.append("")
-    if ai_market_summary.get("current_market_trends"):
-        for trend in ai_market_summary["current_market_trends"]:
-            lines.append(f"### {trend.get('trend', 'Trend')}")
-            lines.append(f"**Explanation:** {trend.get('explanation', '')}")
-            lines.append("")
-            if trend.get("deterministic_evidence"):
-                lines.append("**Evidence:**")
-                for ev in trend["deterministic_evidence"]:
-                    lines.append(f"- {ev}")
-            if trend.get("affected_role_clusters"):
-                lines.append(f"\n**Affected Roles:** {', '.join(trend['affected_role_clusters'])}")
-            if trend.get("example_jobs"):
-                lines.append(f"\n**Example Jobs:** {', '.join(trend['example_jobs'])}")
-            lines.append("")
-    else:
-        lines.append("*No AI trend insights generated.*")
+            
+        lines.append("### Recommendations")
+        recs = []
+        if data.get("case_study_recommendations"):
+            recs.append("**Recommended Case Study / Project:**")
+            for r in data["case_study_recommendations"]:
+                recs.append(f"- {r}")
+        if data.get("portfolio_recommendations"):
+            recs.append("**Portfolio Presentation Recommendations:**")
+            for r in data["portfolio_recommendations"]:
+                recs.append(f"- {r}")
+        if data.get("resume_keywords"):
+            recs.append(f"**Resume Keywords:** {', '.join(data['resume_keywords'])}")
+        if data.get("resume_actions"):
+            recs.append("**Resume Actions:**")
+            for r in data["resume_actions"]:
+                recs.append(f"- {r}")
+        if data.get("linkedin_actions"):
+            recs.append("**LinkedIn Actions:**")
+            for r in data["linkedin_actions"]:
+                recs.append(f"- {r}")
+            
+        lines.extend(recs)
         lines.append("")
 
-    # ── Section 3: What Employers Are Looking For by Role ──
-    lines.append("## 3. What Employers Are Looking For by Role")
+    sec_num = len(roles) + 2
+    
+    # ── Cross-Role Patterns ──
+    lines.append(f"## {sec_num}. Cross-Role Patterns")
     lines.append("")
-    if ai_market_summary.get("role_specific_requirements"):
-        for role, reqs in ai_market_summary["role_specific_requirements"].items():
-            lines.append(f"### {role}")
-            if reqs.get("what_the_role_does"):
-                lines.append("**What the Role Does:**")
-                for item in reqs["what_the_role_does"]:
-                    lines.append(f"- {item}")
-            if reqs.get("required_skills"):
-                lines.append("\n**Required Skills:**")
-                for item in reqs["required_skills"]:
-                    lines.append(f"- {item}")
-            if reqs.get("common_responsibilities"):
-                lines.append("\n**Common Responsibilities:**")
-                for item in reqs["common_responsibilities"]:
-                    lines.append(f"- {item}")
-            lines.append("")
-    else:
-        lines.append("*No role-specific insights generated.*")
-        lines.append("")
-
-    # ── Section 4: Required vs Preferred Skills ──
-    lines.append("## 4. Required vs Preferred Skills")
-    lines.append("")
-    if ai_market_summary.get("required_vs_preferred_patterns"):
-        for pattern in ai_market_summary["required_vs_preferred_patterns"]:
-            lines.append(f"- {pattern}")
-    else:
-        lines.append("*No required vs preferred pattern insights generated.*")
-    lines.append("")
-
-    # ── Section 5: Cross-Role Skill Patterns ──
-    lines.append("## 5. Cross-Role Skill Patterns")
-    lines.append("")
-    if ai_market_summary.get("cross_role_skill_patterns"):
-        for pattern in ai_market_summary["cross_role_skill_patterns"]:
+    if ai_market_summary.get("cross_role_patterns"):
+        for pattern in ai_market_summary["cross_role_patterns"]:
             lines.append(f"- {pattern}")
     else:
         lines.append("*No cross-role patterns generated.*")
     lines.append("")
-
-    # ── Section 6: What This Means for Me ──
-    lines.append("## 6. What This Means for Me")
-    lines.append("")
-    if ai_market_summary:
-        if ai_market_summary.get("resume_recommendations"):
-            lines.append("### Resume Recommendations")
-            for rec in ai_market_summary["resume_recommendations"]:
-                lines.append(f"- {rec}")
-            lines.append("")
-        if ai_market_summary.get("portfolio_recommendations"):
-            lines.append("### Portfolio Recommendations")
-            for rec in ai_market_summary["portfolio_recommendations"]:
-                lines.append(f"- {rec}")
-            lines.append("")
-        if ai_market_summary.get("linkedin_recommendations"):
-            lines.append("### LinkedIn Recommendations")
-            for rec in ai_market_summary["linkedin_recommendations"]:
-                lines.append(f"- {rec}")
-            lines.append("")
-        if ai_market_summary.get("skills_to_learn"):
-            lines.append("### Skills to Learn")
-            for rec in ai_market_summary["skills_to_learn"]:
-                lines.append(f"- {rec}")
-            lines.append("")
-
-    # ── Section 7: Changes Since the Previous Run ──
-    lines.append("## 7. Changes Since the Previous Run")
-    lines.append("")
+    sec_num += 1
     
-    # Honest trends
-    computed_trends = run_stats.get("computed_trends", {})
-    if computed_trends.get("insufficient_data"):
-        lines.append(f"*{computed_trends.get('message', 'Insufficient data for deterministic trends')}*")
+    # ── Optional Changes ──
+    if getattr(config.report, "include_role_history_changes", False) and ai_market_summary.get("optional_role_changes"):
+        lines.append(f"## {sec_num}. Notable Changes")
         lines.append("")
-    elif computed_trends.get("trends"):
-        lines.append("### Deterministic Skill Shifts")
-        for trend in computed_trends["trends"][:5]:
-            lines.append(f"- **{trend['skill'].title()}**: Grew by {trend['percentage_point_change']}% (from {trend['previous_percent']}% to {trend['current_percent']}%)")
-        lines.append("")
-
-    if ai_market_summary.get("changes_since_previous_run"):
-        lines.append("### AI Identified Changes")
-        for change in ai_market_summary["changes_since_previous_run"]:
+        for change in ai_market_summary["optional_role_changes"]:
             lines.append(f"- {change}")
         lines.append("")
+        sec_num += 1
 
-    # ── Section 8: Current Job Details ──
-    lines.append("## 8. Current Job Details")
+    # ── Detailed Current Jobs ──
+    lines.append(f"## {sec_num}. Detailed Current Jobs Grouped by Role")
     lines.append("")
     
-    if new_jobs:
-        lines.append("### New Opportunities")
-        for job in new_jobs:
-            identity = job.get("_stable_identity", "")
-            ai_result = ai_job_analyses.get(identity)
-            lines.append(_format_ai_job_card(job, ai_result))
+    all_active_jobs = []
+    all_active_jobs.extend(new_jobs)
+    all_active_jobs.extend(updated_jobs)
+    if include_previously_seen:
+        all_active_jobs.extend(unchanged_jobs)
+        
+    all_active_jobs.sort(key=lambda j: j.get("match_score", 0), reverse=True)
+    
+    # Group jobs by canonical target role
+    grouped_jobs = {role: [] for role in roles}
+        
+    for job in all_active_jobs:
+        identity = job.get("_stable_identity", "")
+        ai_result = ai_job_analyses.get(identity)
+        change_result = ai_update_analyses.get(identity) if job in updated_jobs else None
+        
+        assigned = job.get("matched_target_role")
+        match_state = job.get("match_state", "unmatched")
+        
+        if match_state == "unmatched" or not assigned or assigned not in roles:
+            # We skip rendering unmatched jobs in the detailed section per requirements
+            continue
             
-    if updated_jobs:
-        lines.append("### Materially Updated Jobs")
-        for job in updated_jobs:
-            identity = job.get("_stable_identity", "")
-            change_result = ai_update_analyses.get(identity)
-            lines.append(_format_updated_job_card(job, change_result))
+        if change_result:
+            grouped_jobs[assigned].append((job, _format_updated_job_card(job, change_result)))
+        else:
+            grouped_jobs[assigned].append((job, _format_ai_job_card(job, ai_result)))
             
-    if include_previously_seen and unchanged_jobs:
-        lines.append("### Active Previously Seen Jobs")
-        lines.append("<details><summary>Click to view unchanged active jobs</summary>")
+    limit_per_role = getattr(config.analysis_scope, "detailed_current_jobs_limit", 15)
+    
+    for role in roles:
+        if grouped_jobs[role]:
+            lines.append(f"### {role}")
+            for job_tuple in grouped_jobs[role][:limit_per_role]:
+                lines.append(job_tuple[1])
+            if len(grouped_jobs[role]) > limit_per_role:
+                lines.append(f"#### Additional {role} Jobs")
+                for job_tuple in grouped_jobs[role][limit_per_role:]:
+                    lines.append(_format_job_compact(job_tuple[0]))
+                lines.append("")
+
+    if include_appendix and appendix_items:
+        lines.append(f"## {sec_num}. Evidence Appendix")
         lines.append("")
-        for job in unchanged_jobs:
-            identity = job.get("_stable_identity", "")
-            ai_result = ai_job_analyses.get(identity)
-            if ai_result:
-                lines.append(_format_ai_job_card(job, ai_result))
-            else:
-                title = job.get("title", "Unknown")
-                company = job.get("company", "Unknown")
-                url = job.get("url", "#")
-                lines.append(f"- **[{title} @ {company}]({url})**")
-        lines.append("</details>")
-        lines.append("")
+        for context, overflow in appendix_items:
+            safe_id = "".join(c if c.isalnum() else "-" for c in context.lower())
+            lines.append(f"### <a id=\"appendix-{safe_id}\"></a>{context}")
+            for ev in overflow:
+                lines.append(f"- {ev}")
+            lines.append("")
 
     return "\n".join(lines)

@@ -79,56 +79,48 @@ NEW JOB DESCRIPTION:
 
 Return ONLY valid JSON, no markdown fences, no explanation."""
 
-_MARKET_SUMMARY_PROMPT = """You are a job market analyst. Based on the data below, synthesize an incremental market intelligence report.
+_MARKET_SUMMARY_PROMPT = """You are a job market analyst. Based on the data below, synthesize a concise, quantitative Current Market Snapshot report.
 
 RULES:
-- Do NOT invent counts or statistics. All numeric totals come from the deterministic metrics provided.
+- Do NOT invent counts or statistics. All numeric totals come from the metrics provided.
 - Analyze ONLY the jobs supplied below. Do not assume information about jobs not shown.
-- Clearly distinguish: today's new evidence, historical baseline, and your interpretation.
-- Every trend must cite specific evidence from the job data.
+- Do NOT use historical framing or language like "growing", "increasing", "declining", "emerging", or "shift toward". Focus entirely on current state.
+- Use concise, quantitative writing. Prefer: "AI/LLM experience appeared in 28 of 45 current jobs (62.2%)." Avoid: "The market continues to show robust demand for AI."
+- The same insight MUST NOT be fully repeated across multiple sections.
+- Group the intelligence explicitly by the CONFIGURED ROLES provided below. Create a separate analysis for each role.
+
+CONFIGURED ROLES:
+{configured_roles}
 
 CURRENT RUN METRICS:
 {run_metrics}
 
-PREVIOUS SUCCESSFUL RUN METRICS:
-{previous_metrics}
-
 CURRENT JOB ANALYSES ({current_count} jobs):
 {current_analyses}
 
-Return a JSON object with this schema:
+Return a JSON object with this exact schema:
 {{
+  "configured_roles": ["string (exact names from above)"],
   "market_snapshot": {{
-    "executive_summary": ["string"],
-    "dominant_hiring_patterns": ["string"],
-    "candidate_profile_employers_want": ["string"]
+    "executive_summary": ["string (3-5 concise insights across all roles)"]
   }},
-  "current_market_trends": [
-    {{
-      "trend": "string",
-      "explanation": "string",
-      "deterministic_evidence": ["string"],
-      "affected_role_clusters": ["string"],
-      "example_jobs": ["string"]
-    }}
-  ],
-  "role_specific_requirements": {{
-    "role_cluster": {{
-      "what_the_role_does": ["string"],
-      "required_skills": ["string"],
-      "preferred_skills": ["string"],
-      "common_responsibilities": ["string"],
-      "tools_and_technologies": ["string"],
-      "candidate_profile": ["string"]
+  "role_analyses": {{
+    "RoleName1": {{
+      "job_count": 0,
+      "responsibility_frequencies": [{{"responsibility": "string", "count": 1, "percentage": 100, "examples": ["string"]}}],
+      "required_skill_frequencies": [{{"skill": "string", "count": 1, "percentage": 100}}],
+      "preferred_skill_frequencies": [{{"skill": "string", "count": 1, "percentage": 100}}],
+      "role_specific_insights": ["string (1-2 sentences)"],
+      "ideal_candidate_profile": ["string"],
+      "case_study_recommendations": ["string"],
+      "portfolio_recommendations": ["string"],
+      "resume_keywords": ["string"],
+      "resume_actions": ["string"],
+      "linkedin_actions": ["string"]
     }}
   }},
-  "cross_role_skill_patterns": ["string"],
-  "required_vs_preferred_patterns": ["string"],
-  "resume_recommendations": ["string"],
-  "portfolio_recommendations": ["string"],
-  "linkedin_recommendations": ["string"],
-  "skills_to_learn": ["string"],
-  "changes_since_previous_run": ["string"]
+  "cross_role_patterns": ["string"],
+  "optional_role_changes": []
 }}
 
 Return ONLY valid JSON, no markdown fences, no explanation."""
@@ -240,22 +232,33 @@ class AIProvider(ABC):
         run_metrics: Dict[str, Any],
         previous_metrics: Optional[Dict[str, Any]],
         current_analyses: List[Dict[str, Any]],
+        configured_roles: List[str] = None,
     ) -> Dict[str, Any]:
         """
         Synthesize a current market snapshot report based on all active jobs.
 
         Returns structured market summary dict, or empty dict on failure.
         """
+        configured_roles = configured_roles or []
         prompt = _MARKET_SUMMARY_PROMPT.format(
+            configured_roles=json.dumps(configured_roles),
             run_metrics=json.dumps(run_metrics, indent=2),
-            previous_metrics=json.dumps(previous_metrics, indent=2) if previous_metrics else "No previous run data available.",
             current_count=len(current_analyses),
             current_analyses=json.dumps(current_analyses[:40], indent=2, ensure_ascii=False),
         )
 
         try:
             response = self._call_model(prompt, self.synthesis_model)
-            return _parse_json_response(response)
+            parsed = _parse_json_response(response)
+            if not parsed:
+                logger.error(f"Market synthesis JSON parsing failed. Response length: {len(response)}")
+                logger.error(f"First 500 chars of response: {response[:500]}")
+                import pathlib
+                debug_path = pathlib.Path("reports/debug")
+                debug_path.mkdir(parents=True, exist_ok=True)
+                with open(debug_path / "latest-market-synthesis-raw.txt", "w", encoding="utf-8") as f:
+                    f.write(response)
+            return parsed
         except Exception as e:
             logger.warning("AI market summary generation failed: %s", e)
             return {}

@@ -30,7 +30,7 @@ def test_extract_keyword_counts():
     counts = extract_keyword_counts(jobs, groups)
     
     assert "ai_ml" in counts
-    assert "ai" in counts["ai_ml"] # Lowercased in dict? Wait, the dict keys are the exact keyword strings provided.
+    assert "AI" in counts["ai_ml"] # Lowercased in dict? Wait, the dict keys are the exact keyword strings provided.
     # The function uses original casing for keys
     assert "AI" in counts["ai_ml"]
     assert counts["ai_ml"]["AI"]["count"] == 1
@@ -49,9 +49,9 @@ def test_extract_job_requirements():
     }
     reqs = extract_job_requirements(job)
     
-    assert "Frontend Ecosystem (React/TS)" in reqs["frontend_skills"]
-    assert "AI/ML (LLMs, RAG, Generative AI)" in reqs["ai_ml_skills"]
-    assert "Cross-functional Collaboration" in reqs["collaboration_skills"]
+    assert "React/TypeScript" in reqs["hard_skills"]
+    assert "LLMs/GenAI" in reqs["hard_skills"]
+    assert "Cross-functional Collaboration" in reqs["soft_skills"]
     assert len(reqs["responsibilities"]) >= 1
 
 

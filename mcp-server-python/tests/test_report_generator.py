@@ -2,7 +2,7 @@
 Unit tests for the report_generator module.
 """
 
-from utils.report_generator import _truncate_description, generate_markdown_report
+from utils.report_generator import _truncate_words, generate_markdown_report
 from utils.watch_config import JobWatchConfig
 
 
@@ -13,18 +13,17 @@ def get_mock_config() -> JobWatchConfig:
     )
 
 
-def test_truncate_description():
-    assert _truncate_description(None) == "*No description provided.*"
-    assert _truncate_description("") == "*No description provided.*"
+def test_truncate_words():
+    assert _truncate_words(None, 10) == ""
+    assert _truncate_words("", 10) == ""
     
     short_desc = "This is a short description."
-    assert _truncate_description(short_desc, 100) == short_desc
+    assert _truncate_words(short_desc, 100) == short_desc
     
-    long_desc = "A " * 1000
-    truncated = _truncate_description(long_desc, 800)
-    assert len(truncated) <= 803 # 800 + "..."
+    long_desc = "word " * 1000
+    truncated = _truncate_words(long_desc, 10)
+    assert len(truncated.split()) == 10
     assert truncated.endswith("...")
-
 
 def test_generate_markdown_report():
     config = get_mock_config()
@@ -36,7 +35,7 @@ def test_generate_markdown_report():
             "url": "http://example.com/1",
             "is_preferred_company": True,
             "match_score": 90,
-            "matched_role": "AI Engineer",
+            "matched_target_role": "AI Engineer",
             "matched_keywords": ["python", "LLM"]
         },
         {
@@ -68,13 +67,47 @@ def test_generate_markdown_report():
     
     # Check stats are present
     assert "Total Scraped:** 100" in markdown
-    assert "Total Matched Jobs:** 3" in markdown
+    assert "Total Jobs Included in Report:** 3" in markdown
     
     # Check sections
-    assert "Section 1: Preferred Company Matches (1)" in markdown
-    assert "Section 2: Strong Matches (1)" in markdown
-    assert "Section 3: Other Matches (1)" in markdown
+    assert "## 1. Executive Summary" in markdown
+    assert "## 8. Individual Job Appendix" in markdown
     
     # Check job rendering
-    assert "### [AI Engineer @ OpenAI](http://example.com/1)" in markdown
-    assert "**Keywords Found:** python, LLM" in markdown
+    assert "[AI Engineer @ OpenAI](http://example.com/1)" in markdown
+    assert "Top Keywords: python, LLM" in markdown
+
+def test_regression_no_duplicate_required_column():
+    """
+    Asserts that the rendered table header contains only one 'Required' column.
+    """
+    from utils.report_generator import generate_incremental_report
+    from utils.watch_config import JobWatchConfig
+    
+    config = JobWatchConfig(
+        target_roles=["Data Scientist"],
+        locations=["Remote"]
+    )
+    
+    ai_summary = {
+        "role_analyses": {
+            "Data Scientist": {
+                "job_count": 1,
+                "required_skill_frequencies": [{"skill": "Python", "count": 1, "percentage": 100}],
+                "preferred_skill_frequencies": [{"skill": "R", "count": 1, "percentage": 100}]
+            }
+        }
+    }
+    
+    classified = {"new": [], "updated": [], "unchanged": []}
+    
+    report = generate_incremental_report(
+        classified_jobs=classified,
+        run_stats={},
+        config=config,
+        ai_market_summary=ai_summary,
+        include_previously_seen=False
+    )
+    
+    assert "| Skill | Required | Preferred | Mentioned/Unclear | Total Role Jobs |" in report
+    assert "| Skill | Required | Required | Preferred | Mentioned/Unclear | Total Role Jobs |" not in report

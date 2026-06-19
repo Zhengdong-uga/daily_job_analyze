@@ -112,6 +112,9 @@ def _make_job(
         "source": source,
         "url": url,
         "description": description,
+        "match_state": "matched",
+        "matched_target_role": "Software Engineer",
+        "_stable_identity": title
     }
 
 
@@ -460,7 +463,7 @@ class TestIncrementalReport:
     def _make_config(self):
         from utils.watch_config import JobWatchConfig
         return JobWatchConfig(
-            target_roles=["AI Engineer"],
+            target_roles=["Software Engineer"],
             locations=["New York, NY"],
         )
 
@@ -471,8 +474,10 @@ class TestIncrementalReport:
             "updated": [_make_job(title="Updated Job", url="https://example.com/updated")],
             "unchanged": [_make_job(title="Old Job", url="https://example.com/old")],
         }
+        config = self._make_config()
+        config.analysis_scope.include_all_current_jobs = False
         report = generate_incremental_report(
-            classified, {"scrape_hours_old": 24}, self._make_config()
+            classified, {"scrape_hours_old": 24}, config, include_previously_seen=False
         )
         assert "New Job" in report
         assert "Updated Job" in report
@@ -486,16 +491,20 @@ class TestIncrementalReport:
             "updated": [],
             "unchanged": [_make_job()] * 10,
         }
+        config = self._make_config()
+        config.analysis_scope.include_all_current_jobs = False
         report = generate_incremental_report(
-            classified, {"scrape_hours_old": 24}, self._make_config()
+            classified, {"scrape_hours_old": 24}, config, include_previously_seen=False
         )
         assert "| Previously seen | 10 |" in report
 
     def test_zero_new_report_is_short(self):
         """Report with 0 new and 0 updated is concise."""
         classified = {"new": [], "updated": [], "unchanged": []}
+        config = self._make_config()
+        config.analysis_scope.include_all_current_jobs = False
         report = generate_incremental_report(
-            classified, {"scrape_hours_old": 24}, self._make_config()
+            classified, {"scrape_hours_old": 24}, config, include_previously_seen=False
         )
         assert "| **New jobs** | **0** |" in report
         assert len(report) < 3000  # Should be concise
@@ -508,7 +517,7 @@ class TestIncrementalReport:
             {"scrape_hours_old": 48, "scraped_count": 200, "unique_count": 50, "ai_analyzed_count": 5},
             self._make_config()
         )
-        assert "Executive Market Snapshot" in report
+        assert "Current Job Market Snapshot" in report
         assert "48 hours" in report
 
 
@@ -610,3 +619,103 @@ class TestBackfillMigration:
 
         rows = db.execute("SELECT COUNT(*) as cnt FROM job_history").fetchone()
         assert rows["cnt"] == 1
+
+
+# ---------------------------------------------------------------------------
+# Report and Archive Generator Tests
+# ---------------------------------------------------------------------------
+
+from utils.report_generator import generate_incremental_report, _deduplicate_insights
+from utils.watch_config import JobWatchConfig, ReportConfig, AnalysisScopeConfig
+import re
+
+def test_report_has_toc_and_anchors():
+    config = JobWatchConfig(target_roles=["SWE"], locations=[])
+    config.report = ReportConfig(evidence_examples_per_insight=3, include_evidence_appendix=True)
+    report = generate_incremental_report(
+        classified_jobs={"new": [{"title": "Job1"}]},
+        run_stats={},
+        config=config,
+    )
+    
+    assert "## Table of Contents" in report
+    assert "[Executive Current Market Snapshot](#1-executive-current-market-snapshot)" in report
+    assert "- [SWE Intelligence](#2-swe-intelligence)" in report
+
+def test_repeated_insight_deduplication():
+    # Setup summary with repeated insights
+    summary = {
+        "role_analyses": {
+            "Engineering": {
+                "role_specific_insights": ["Must know Python very well"],
+                "resume_actions": ["Learn Rust", "Must know Python very well"]
+            },
+            "Data": {
+                "role_specific_insights": ["Must know Python very well", "Learn SQL"]
+            }
+        }
+    }
+    
+    _deduplicate_insights(summary)
+    
+    # "Must know Python very well" is seen in both roles. Should become a cross role pattern.
+    assert "cross_role_patterns" in summary
+    assert any("Must know Python very well" in p for p in summary["cross_role_patterns"])
+    # It also stays in the roles but deduplicated internally.
+    assert "Must know Python very well" in summary["role_analyses"]["Engineering"]["role_specific_insights"]
+    assert "Must know Python very well" not in summary["role_analyses"]["Engineering"]["resume_actions"]
+    assert "Learn Rust" in summary["role_analyses"]["Engineering"]["resume_actions"]
+
+def test_all_current_jobs_detailed_and_compact():
+    config = JobWatchConfig(target_roles=["SWE"], locations=[])
+    config.analysis_scope = AnalysisScopeConfig(detailed_current_jobs_limit=2, include_all_current_jobs=True)
+    
+    jobs = [
+        {"title": "Job1", "_stable_identity": "j1", "matched_target_role": "SWE", "match_state": "matched"},
+        {"title": "Job2", "_stable_identity": "j2", "matched_target_role": "SWE", "match_state": "matched"},
+        {"title": "Job3", "_stable_identity": "j3", "matched_target_role": "SWE", "match_state": "matched"}
+    ]
+    
+    report = generate_incremental_report(
+        classified_jobs={"new": [jobs[0], jobs[1]], "unchanged": [jobs[2]]},
+        run_stats={},
+        config=config,
+    )
+    
+    assert "Detailed Current Jobs Grouped by Role" in report
+    assert "### SWE" in report
+    assert "Job1 @" in report
+    assert "#### Additional SWE Jobs" in report
+    assert "Job3" in report
+
+def test_report_size_limits():
+    from utils.report_generator import _truncate_words
+    
+    assert _truncate_words("One two three four five", 3) == "One two three..."
+    assert _truncate_words("One two", 3) == "One two"
+    
+    config = JobWatchConfig(target_roles=["Dev"], locations=[])
+    config.report = ReportConfig(max_executive_words=5, max_pattern_words=4)
+    
+    ai_summary = {
+        "configured_roles": ["Dev"],
+        "market_snapshot": {
+            "executive_summary": ["This is a very long sentence that needs to be truncated safely."]
+        },
+        "role_analyses": {
+            "Dev": {
+                "job_count": 1,
+                "role_specific_insights": ["This explanation is also excessively long."]
+            }
+        }
+    }
+    
+    report = generate_incremental_report(
+        classified_jobs={"new": []},
+        run_stats={},
+        config=config,
+        ai_market_summary=ai_summary
+    )
+    
+    assert "This is a very long..." in report
+    assert "This explanation is also excessively long." in report

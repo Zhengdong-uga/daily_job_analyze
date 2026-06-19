@@ -26,7 +26,6 @@ htmlcov/
 
 # Environment files
 .env
-.env.*
 
 # Obsidian workspace/cache
 .obsidian/
@@ -70,5 +69,4 @@ data/templates/resume_skeleton.tex
 trackers/*.md
 !trackers/template.md
 !trackers/job-application.md
-job_watch_config.yaml
 reports/

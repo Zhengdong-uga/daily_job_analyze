@@ -38,7 +38,7 @@ def test_calculate_match_score_exact_role_and_location():
     score, metadata = calculate_match_score(job, config)
     # 30 (role) + 20 (location) = 50
     assert score == 50
-    assert metadata["matched_role"] == "AI Engineer"
+    assert metadata["matched_target_role"] == "AI Engineer"
     assert metadata["matched_location"] == "New York"
     assert not metadata["is_preferred_company"]
 
@@ -55,7 +55,7 @@ def test_calculate_match_score_alias_match():
     score, metadata = calculate_match_score(job, config)
     # 30 (role alias) + 20 (location alias) + 5 (python keyword) = 55
     assert score == 55
-    assert metadata["matched_role"] == "AI Engineer"
+    assert metadata["matched_target_role"] == "AI Engineer"
     assert metadata["matched_location"] == "New York"
     assert "python" in metadata["matched_keywords"]
 
