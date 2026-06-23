@@ -72,3 +72,5 @@ trackers/*.md
 !trackers/job-application.md
 job_watch_config.yaml
 reports/
+data/job_history.db
+job_watch_config.yaml

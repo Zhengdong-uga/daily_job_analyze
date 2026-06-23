@@ -32,6 +32,7 @@ class PreferencesConfig:
     include_senior: bool = False
     minimum_match_score: int = 40
     max_jobs_in_report: int = 50
+    max_years_of_experience: int | None = None
 
 
 @dataclass
@@ -215,6 +216,7 @@ def load_config(config_path: Path) -> JobWatchConfig:
         include_senior=seniority_data.get("include_senior", False),
         minimum_match_score=prefs_data.get("minimum_match_score", 40),
         max_jobs_in_report=prefs_data.get("max_jobs_in_report", 50),
+        max_years_of_experience=prefs_data.get("max_years_of_experience", None),
     )
     
     scrape_data = data.get("scrape", {})

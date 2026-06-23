@@ -11,6 +11,30 @@ from typing import Any, Dict, List, Optional, Tuple
 from utils.watch_config import JobWatchConfig
 
 
+def extract_max_yoe(text: str) -> int:
+    """Extract the maximum years-of-experience number mentioned in text.
+
+    Scans for common YoE patterns like '5+ years of experience',
+    'minimum of 3 yrs exp', or '2-4 years experience'.  Returns the
+    highest number found (capped at 20 to ignore outliers), or 0 if
+    no pattern matches.
+    """
+    patterns = [
+        r"(\d+)(?:\s*-\s*\d+)?\+?\s*(?:years?|yrs?)(?:\s+of)?\s+(?:experience|exp)",
+        r"(?:minimum|at least|requires|requiring)\s+(?:of\s+)?(\d+)\+?\s*(?:years?|yrs?)",
+    ]
+    max_yoe = 0
+    for p in patterns:
+        for m in re.finditer(p, text, re.IGNORECASE):
+            try:
+                yoe = int(m.group(1))
+                if yoe < 20:
+                    max_yoe = max(max_yoe, yoe)
+            except ValueError:
+                pass
+    return max_yoe
+
+
 def normalize_text(text: Optional[str]) -> str:
     """Normalize text for case-insensitive matching."""
     if not text:
@@ -69,9 +93,18 @@ def calculate_match_score(job: Dict[str, Any], config: JobWatchConfig) -> Tuple[
     # Exclude checks (return -1 immediately)
     if contains_any(company, config.exclude_companies):
         return -1, {}
-        
-    if contains_any(title_and_desc, config.exclude_keywords):
+
+    # Exclude keywords checked against TITLE ONLY (not description) to avoid
+    # false positives when a junior JD mentions "report to senior lead" etc.
+    if contains_any(title, config.exclude_keywords):
         return -1, {}
+
+    # YoE filter: exclude jobs whose description requires more experience
+    # than the configured maximum.
+    if config.preferences.max_years_of_experience is not None:
+        yoe = extract_max_yoe(description)
+        if yoe > config.preferences.max_years_of_experience:
+            return -1, {}
 
     # Scoring & Metadata tracking
     matched_keywords = []

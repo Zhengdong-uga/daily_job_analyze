@@ -116,3 +116,89 @@ def test_filter_and_rank_jobs():
     # OpenAI job should be first (preferred company)
     assert filtered[0]["id"] == 4
     assert filtered[1]["id"] == 3
+
+
+def test_yoe_filter_excludes_high_experience():
+    """Jobs requiring more YoE than max_years_of_experience are excluded."""
+    config = JobWatchConfig(
+        target_roles=["AI Engineer"],
+        locations=["Remote"],
+        preferences=PreferencesConfig(
+            minimum_match_score=0,
+            max_years_of_experience=3,
+        ),
+    )
+    job = {
+        "title": "AI Engineer",
+        "company": "Tech",
+        "location": "Remote",
+        "description": "Requires 5+ years of experience in Python.",
+    }
+    score, _ = calculate_match_score(job, config)
+    assert score == -1
+
+
+def test_yoe_filter_allows_low_experience():
+    """Jobs within the YoE cap pass through."""
+    config = JobWatchConfig(
+        target_roles=["AI Engineer"],
+        locations=["Remote"],
+        preferences=PreferencesConfig(
+            minimum_match_score=0,
+            max_years_of_experience=3,
+        ),
+    )
+    job = {
+        "title": "AI Engineer",
+        "company": "Tech",
+        "location": "Remote",
+        "description": "Looking for 2 years of experience.",
+    }
+    score, _ = calculate_match_score(job, config)
+    assert score >= 0
+
+
+def test_yoe_filter_disabled_by_default():
+    """When max_years_of_experience is None, no YoE filtering occurs."""
+    config = JobWatchConfig(
+        target_roles=["AI Engineer"],
+        locations=["Remote"],
+        preferences=PreferencesConfig(minimum_match_score=0),
+    )
+    job = {
+        "title": "AI Engineer",
+        "company": "Tech",
+        "location": "Remote",
+        "description": "Requires 10+ years of experience.",
+    }
+    score, _ = calculate_match_score(job, config)
+    assert score >= 0
+
+
+def test_exclude_keywords_title_only():
+    """Exclude keywords should only match the title, not the description body."""
+    config = JobWatchConfig(
+        target_roles=["Frontend Engineer"],
+        locations=["Remote"],
+        exclude_keywords=["Senior", "Lead"],
+        preferences=PreferencesConfig(minimum_match_score=0),
+    )
+    # "Senior" appears in the description but NOT in the title — should pass.
+    job = {
+        "title": "Frontend Engineer",
+        "company": "Tech",
+        "location": "Remote",
+        "description": "You will report to a senior engineering lead.",
+    }
+    score, _ = calculate_match_score(job, config)
+    assert score >= 0
+
+    # "Senior" in the title — should be excluded.
+    job_senior = {
+        "title": "Senior Frontend Engineer",
+        "company": "Tech",
+        "location": "Remote",
+        "description": "Junior-friendly team.",
+    }
+    score2, _ = calculate_match_score(job_senior, config)
+    assert score2 == -1

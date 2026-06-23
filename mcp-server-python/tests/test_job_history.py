@@ -508,7 +508,7 @@ class TestIncrementalReport:
             {"scrape_hours_old": 48, "scraped_count": 200, "unique_count": 50, "ai_analyzed_count": 5},
             self._make_config()
         )
-        assert "Executive Market Snapshot" in report
+        assert "Executive Snapshot" in report
         assert "48 hours" in report
 
 
