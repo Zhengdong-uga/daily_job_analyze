@@ -47,12 +47,57 @@ uv sync --extra ai-openai
 You can run the pipeline manually or set it up via cron/Windows Task Scheduler:
 
 ```bash
-uv run python scripts/run_daily_job_watch.py --config job_watch_config.yaml --send-email
+uv run python scripts/run_daily_job_watch.py \\
+  --config job_watch_config.yaml \\
+  --hours-old 24 \\
+  --ai \\
+  --ai-provider gemini \\
+  --max-ai-jobs 100 \\
+  --send-email
 ```
 
 **Options:**
 - `--ai`: Force enable AI (overrides config).
 - `--reanalyze-all`: Ignore local AI cache and force a complete reanalysis of all currently active jobs.
+
+## Available Commands
+
+Here are the primary commands you will use to interact with the system:
+
+### 1. Run the Daily Job Pipeline (Main Pipeline)
+Scrapes the latest jobs, analyzes them with AI, and generates your daily report.
+```bash
+uv run python scripts/run_daily_job_watch.py \
+  --config job_watch_config.yaml \
+  --hours-old 24 \
+  --ai \
+  --ai-provider gemini \
+  --max-ai-jobs 100 \
+  --send-email
+```
+**Useful flags:**
+- `--report-only`: Skips scraping and directly regenerates the report using existing database data (great for testing configuration changes).
+- `--reanalyze-all`: Ignores the local AI cache and forces a fresh AI analysis of all currently active jobs.
+
+### 2. Open the Interactive Job Archive
+Starts a local web server to view all historical jobs, search through them, and **delete** irrelevant jobs directly from the database.
+```bash
+uv run python scripts/export_job_archive.py
+```
+*Note: This will automatically find an open port (like `8000`) and open it in your browser. Press `Ctrl+C` in the terminal to stop the server when you are done.*
+
+### 3. Check for Duplicate Jobs (Manual Tool)
+If you find a job on LinkedIn and want to quickly check if the system has already tracked it:
+```bash
+./scripts/check_job.sh "Job URL" "Company Name" "Position Name"
+```
+
+### 4. Install / Update Dependencies
+If you need to update packages or switch AI providers:
+```bash
+uv sync --all-groups
+uv sync --extra ai-gemini    # Ensure Gemini dependencies are installed
+```
 
 ## Architecture
 
@@ -61,6 +106,54 @@ uv run python scripts/run_daily_job_watch.py --config job_watch_config.yaml --se
 3. **Extraction:** Uses AI (budget-aware) to extract required/soft skills from new or materially updated job descriptions.
 4. **Synthesis:** Aggregates all extracted data alongside rule-based fallbacks to generate market trends and recommendations.
 5. **Reporting:** Generates an 8-section Markdown report and emails it to the configured recipients.
+
+## Historical Job Archive
+
+To keep the daily email focused strictly on the current market, all historically scraped jobs (even those no longer active) are stored in the local database and can be viewed via an interactive, standalone HTML archive.
+
+If you want to see the saved/fetched jobs, run the following command to generate and open the archive:
+
+```bash
+uv run python scripts/export_job_archive.py \\
+  --config job_watch_config.yaml \\
+  --open
+```
+
+**Features:**
+- Client-side search by title, company, location, or skill.
+- Sort by first seen, last seen, company, or title.
+- Filter by recent vs older jobs.
+- Expandable job descriptions with AI summaries.
+- Completely offline capable.
+
+## Direct SQLite Access
+
+If you prefer to run custom analytical queries or manually inspect raw job data, you can directly query the SQLite database where all jobs are stored.
+
+To find the database file:
+```bash
+find . -name "jobs.db"
+```
+
+To connect via the SQLite CLI:
+```bash
+sqlite3 data/capture/jobs.db
+```
+
+**Example Queries:**
+```sql
+-- View the latest 50 jobs
+SELECT title, company, location, first_seen_at FROM jobs ORDER BY first_seen_at DESC LIMIT 50;
+
+-- Search for a specific company
+SELECT title, location, url FROM jobs WHERE company LIKE '%OpenAI%';
+
+-- Search by title
+SELECT title, company FROM jobs WHERE title LIKE '%Product Manager%';
+
+-- Lookup full job description for a specific job
+SELECT description FROM jobs WHERE id = 123;
+```
 
 ## Privacy & Data Security
 
