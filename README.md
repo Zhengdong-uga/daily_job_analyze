@@ -39,7 +39,13 @@ uv sync --extra ai-openai
 1. Copy the example configuration files:
    - `cp job_watch_config.example.yaml job_watch_config.yaml`
    - `cp .env.example .env`
-2. Update `.env` with your email credentials and API keys (`GEMINI_API_KEY` or `OPENAI_API_KEY`).
+2. Update `.env` with your credentials:
+   - **AI API Keys**: Add your `GEMINI_API_KEY` or `OPENAI_API_KEY`.
+   - **Email Setup**: To receive the daily email report, configure an SMTP sender. If you use Gmail:
+     1. Go to your Google Account Settings -> Security -> 2-Step Verification.
+     2. Scroll to the bottom and create an **App Password** (a 16-character code).
+     3. In your `.env` file, set `EMAIL_SENDER` to your Gmail address and `EMAIL_PASSWORD` to the **App Password** (NOT your regular Google password).
+     4. Set `EMAIL_RECIPIENT` to the address where you want to receive the reports.
 3. Update `job_watch_config.yaml` with your target roles, locations, keyword groups, and AI preferences.
 
 ### 3) Run the Daily Pipeline
