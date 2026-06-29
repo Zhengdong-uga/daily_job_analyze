@@ -47,12 +47,12 @@ uv sync --extra ai-openai
 You can run the pipeline manually or set it up via cron/Windows Task Scheduler:
 
 ```bash
-uv run python scripts/run_daily_job_watch.py \\
-  --config job_watch_config.yaml \\
-  --hours-old 24 \\
-  --ai \\
-  --ai-provider gemini \\
-  --max-ai-jobs 100 \\
+uv run python scripts/run_daily_job_watch.py \
+  --config job_watch_config.yaml \
+  --hours-old 24 \
+  --ai \
+  --ai-provider gemini \
+  --max-ai-jobs 100 \
   --send-email
 ```
 
@@ -114,9 +114,7 @@ To keep the daily email focused strictly on the current market, all historically
 If you want to see the saved/fetched jobs, run the following command to generate and open the archive:
 
 ```bash
-uv run python scripts/export_job_archive.py \\
-  --config job_watch_config.yaml \\
-  --open
+uv run python scripts/export_job_archive.py
 ```
 
 **Features:**
