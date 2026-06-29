@@ -48,9 +48,6 @@ role_aliases:
 locations:
   - "New York, NY"
   - "New Jersey"
-  - "Maryland"
-  - "Seattle, WA"
-  - "California"
 
 # Define aliases for your target locations.
 location_aliases:
@@ -64,24 +61,7 @@ location_aliases:
     - "Hoboken"
     - "Newark"
     - "Princeton"
-  "Maryland":
-    - "Baltimore"
-    - "Bethesda"
-    - "Rockville"
-    - "College Park"
-  "Seattle, WA":
-    - "Seattle"
-    - "Bellevue"
-    - "Redmond"
-  "California":
-    - "San Francisco"
-    - "Bay Area"
-    - "San Jose"
-    - "Palo Alto"
-    - "Mountain View"
-    - "Los Angeles"
-    - "Irvine"
-    - "San Diego"
+
 
 # -----------------------------------------------------------------------------
 # Company Preferences
@@ -102,11 +82,37 @@ preferred_companies:
   - "Adobe"
   - "Airbnb"
   - "Stripe"
+  - "Netflix"
+  - "Waymo"
+  - "Audible"
+  - "Gemini"
+  - "Apple"
+  - "IBM"
+  - "Capital One"
+  - "ADP"
+  - "UPS"
+  - "Zipline"
+  - "Zillow"
+  - "Zoom"
+  - "Disney"
+  - "EA"
+  
 
 # Jobs from these companies will be entirely excluded from the report.
 exclude_companies:
   - "Revature"
   - "Dice"
+  - "DataAnnotation"
+  - "FDM"
+  - "IT Staffing"
+  - "staffing"
+  - "Experis"
+  - "Consulting"
+  - "IT Consulting"
+  - "IT Contract"
+  - "Contractor"
+  - "KPG99"
+  
 
 # -----------------------------------------------------------------------------
 # Keyword Filters
@@ -138,6 +144,10 @@ exclude_keywords:
   - "12+ years"
   - "Security Clearance"
   - "US Citizen required"
+  - "C2H"
+  - "Contract"
+  - "5+ years"
+  - "7+ years"
 
 # -----------------------------------------------------------------------------
 # Match Preferences

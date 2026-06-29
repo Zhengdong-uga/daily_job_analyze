@@ -53,6 +53,7 @@ class ReportConfig:
     max_executive_words: int = 250
     max_pattern_words: int = 150
     include_role_history_changes: bool = False
+    lookback_days: int = 7
 
 
 @dataclass
@@ -261,6 +262,7 @@ def load_config(config_path: Path) -> JobWatchConfig:
         max_executive_words=report_data.get("max_executive_words", 250),
         max_pattern_words=report_data.get("max_pattern_words", 150),
         include_role_history_changes=report_data.get("include_role_history_changes", False),
+        lookback_days=report_data.get("lookback_days", 7),
     )
     
     email_data = data.get("email", {})

@@ -453,33 +453,6 @@ def generate_incremental_report(
     include_appendix = getattr(config.report, "include_evidence_appendix", True)
     max_executive_words = getattr(config.report, "max_executive_words", 250)
     
-    lines = [f"# Current Job Market Snapshot — {today_str}", ""]
-
-    # Table of Contents
-    lines.append("## Table of Contents")
-    lines.append("- [Executive Current Market Snapshot](#1-executive-current-market-snapshot)")
-    
-    roles = ai_market_summary.get("configured_roles", getattr(config, "target_roles", []))
-    for i, role in enumerate(roles, start=2):
-        safe_id = "".join(c if c.isalnum() else "-" for c in role.lower())
-        lines.append(f"- [{role} Intelligence](#{i}-{safe_id}-intelligence)")
-        
-    sec_num = len(roles) + 2
-    lines.append(f"- [Cross-Role Patterns](#{sec_num}-cross-role-patterns)")
-    
-    if getattr(config.report, "include_role_history_changes", False) and ai_market_summary.get("optional_role_changes"):
-        sec_num += 1
-        lines.append(f"- [Notable Changes](#{sec_num}-notable-changes)")
-        
-    sec_num += 1
-    lines.append(f"- [Detailed Current Jobs](#{sec_num}-detailed-current-jobs-grouped-by-role)")
-    
-    if include_appendix:
-        sec_num += 1
-        lines.append(f"- [Evidence Appendix](#{sec_num}-evidence-appendix)")
-        
-    lines.append("")
-    
     appendix_items = []
 
     def _process_evidence(evidence_list: List[str], context: str) -> List[str]:
@@ -496,10 +469,80 @@ def generate_incremental_report(
             result.append(f"- *See [Evidence Appendix](#appendix-{safe_id}) for {len(overflow)} more examples.*")
         return result
 
+    # ── Pre-build Detailed Current Jobs ──
+    all_active_jobs = []
+    all_active_jobs.extend(new_jobs)
+    all_active_jobs.extend(updated_jobs)
+    if include_previously_seen:
+        all_active_jobs.extend(unchanged_jobs)
+        
+    all_active_jobs.sort(key=lambda j: j.get("match_score", 0), reverse=True)
+    
+    roles = ai_market_summary.get("configured_roles", getattr(config, "target_roles", []))
+    grouped_jobs = {role: [] for role in roles}
+        
+    for job in all_active_jobs:
+        identity = job.get("_stable_identity", "")
+        ai_result = ai_job_analyses.get(identity)
+        change_result = ai_update_analyses.get(identity) if job in updated_jobs else None
+        
+        assigned = job.get("matched_target_role")
+        match_state = job.get("match_state", "unmatched")
+        
+        if match_state == "unmatched" or not assigned or assigned not in roles:
+            continue
+            
+        if change_result:
+            grouped_jobs[assigned].append((job, _format_updated_job_card(job, change_result)))
+        else:
+            grouped_jobs[assigned].append((job, _format_ai_job_card(job, ai_result)))
+            
+    limit_per_role = getattr(config.analysis_scope, "detailed_current_jobs_limit", 15)
+    
+    jobs_lines = []
+    jobs_lines.append(f"## 2. Detailed Current Jobs Grouped by Role")
+    jobs_lines.append("")
+    for role in roles:
+        if grouped_jobs[role]:
+            jobs_lines.append(f"### {role}")
+            for job_tuple in grouped_jobs[role][:limit_per_role]:
+                jobs_lines.append(job_tuple[1])
+            if len(grouped_jobs[role]) > limit_per_role:
+                jobs_lines.append(f"#### Additional {role} Jobs")
+                for job_tuple in grouped_jobs[role][limit_per_role:]:
+                    jobs_lines.append(_format_job_compact(job_tuple[0]))
+                jobs_lines.append("")
+
+    # ── Table of Contents ──
+    toc_lines = []
+    toc_lines.append("## Table of Contents")
+    toc_lines.append("- [Executive Current Market Snapshot](#1-executive-current-market-snapshot)")
+    toc_lines.append("- [Detailed Current Jobs](#2-detailed-current-jobs-grouped-by-role)")
+    
+    for i, role in enumerate(roles, start=3):
+        safe_id = "".join(c if c.isalnum() else "-" for c in role.lower())
+        toc_lines.append(f"- [{role} Intelligence](#{i}-{safe_id}-intelligence)")
+        
+    sec_num = len(roles) + 3
+    toc_lines.append(f"- [Cross-Role Patterns](#{sec_num}-cross-role-patterns)")
+    
+    if getattr(config.report, "include_role_history_changes", False) and ai_market_summary.get("optional_role_changes"):
+        sec_num += 1
+        toc_lines.append(f"- [Notable Changes](#{sec_num}-notable-changes)")
+        
+    if include_appendix:
+        sec_num += 1
+        toc_lines.append(f"- [Evidence Appendix](#{sec_num}-evidence-appendix)")
+        
+    toc_lines.append("")
+
+    # ── Assemble Report ──
+    lines = [f"# Current Job Market Snapshot — {today_str}", ""]
+    lines.extend(toc_lines)
+
     # ── Section 1: Executive Current Market Snapshot ──
     lines.append("## 1. Executive Current Market Snapshot")
     lines.append("")
-    
     lines.append("| Metric | Value |")
     lines.append("|---|---|")
     lines.append(f"| Scrape window | Last {run_stats.get('scrape_hours_old', '?')} hours |")
@@ -516,10 +559,12 @@ def generate_incremental_report(
             lines.append(f"- {_truncate_words(t, max_executive_words)}")
         lines.append("")
 
-    # ── Section 2: Role-by-Role Market Intelligence ──
+    # ── Section 2: Detailed Current Jobs ──
+    lines.extend(jobs_lines)
+
+    # ── Section 3+: Role-by-Role Market Intelligence ──
     role_analyses = ai_market_summary.get("role_analyses", {})
-    
-    for i, role in enumerate(roles, start=2):
+    for i, role in enumerate(roles, start=3):
         safe_id = "".join(c if c.isalnum() else "-" for c in role.lower())
         lines.append(f"## {i}. {role} Intelligence")
         lines.append("")
@@ -604,7 +649,7 @@ def generate_incremental_report(
         lines.extend(recs)
         lines.append("")
 
-    sec_num = len(roles) + 2
+    sec_num = len(roles) + 3
     
     # ── Cross-Role Patterns ──
     lines.append(f"## {sec_num}. Cross-Role Patterns")
@@ -626,57 +671,13 @@ def generate_incremental_report(
         lines.append("")
         sec_num += 1
 
-    # ── Detailed Current Jobs ──
-    lines.append(f"## {sec_num}. Detailed Current Jobs Grouped by Role")
-    lines.append("")
-    
-    all_active_jobs = []
-    all_active_jobs.extend(new_jobs)
-    all_active_jobs.extend(updated_jobs)
-    if include_previously_seen:
-        all_active_jobs.extend(unchanged_jobs)
-        
-    all_active_jobs.sort(key=lambda j: j.get("match_score", 0), reverse=True)
-    
-    # Group jobs by canonical target role
-    grouped_jobs = {role: [] for role in roles}
-        
-    for job in all_active_jobs:
-        identity = job.get("_stable_identity", "")
-        ai_result = ai_job_analyses.get(identity)
-        change_result = ai_update_analyses.get(identity) if job in updated_jobs else None
-        
-        assigned = job.get("matched_target_role")
-        match_state = job.get("match_state", "unmatched")
-        
-        if match_state == "unmatched" or not assigned or assigned not in roles:
-            # We skip rendering unmatched jobs in the detailed section per requirements
-            continue
-            
-        if change_result:
-            grouped_jobs[assigned].append((job, _format_updated_job_card(job, change_result)))
-        else:
-            grouped_jobs[assigned].append((job, _format_ai_job_card(job, ai_result)))
-            
-    limit_per_role = getattr(config.analysis_scope, "detailed_current_jobs_limit", 15)
-    
-    for role in roles:
-        if grouped_jobs[role]:
-            lines.append(f"### {role}")
-            for job_tuple in grouped_jobs[role][:limit_per_role]:
-                lines.append(job_tuple[1])
-            if len(grouped_jobs[role]) > limit_per_role:
-                lines.append(f"#### Additional {role} Jobs")
-                for job_tuple in grouped_jobs[role][limit_per_role:]:
-                    lines.append(_format_job_compact(job_tuple[0]))
-                lines.append("")
-
+    # ── Evidence Appendix ──
     if include_appendix and appendix_items:
         lines.append(f"## {sec_num}. Evidence Appendix")
         lines.append("")
         for context, overflow in appendix_items:
             safe_id = "".join(c if c.isalnum() else "-" for c in context.lower())
-            lines.append(f"### <a id=\"appendix-{safe_id}\"></a>{context}")
+            lines.append(f'### <a id="appendix-{safe_id}"></a>{context}')
             for ev in overflow:
                 lines.append(f"- {ev}")
             lines.append("")

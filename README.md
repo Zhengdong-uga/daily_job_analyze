@@ -60,6 +60,45 @@ uv run python scripts/run_daily_job_watch.py \\
 - `--ai`: Force enable AI (overrides config).
 - `--reanalyze-all`: Ignore local AI cache and force a complete reanalysis of all currently active jobs.
 
+## Available Commands
+
+Here are the primary commands you will use to interact with the system:
+
+### 1. Run the Daily Job Pipeline (Main Pipeline)
+Scrapes the latest jobs, analyzes them with AI, and generates your daily report.
+```bash
+uv run python scripts/run_daily_job_watch.py \
+  --config job_watch_config.yaml \
+  --hours-old 24 \
+  --ai \
+  --ai-provider gemini \
+  --max-ai-jobs 100 \
+  --send-email
+```
+**Useful flags:**
+- `--report-only`: Skips scraping and directly regenerates the report using existing database data (great for testing configuration changes).
+- `--reanalyze-all`: Ignores the local AI cache and forces a fresh AI analysis of all currently active jobs.
+
+### 2. Open the Interactive Job Archive
+Starts a local web server to view all historical jobs, search through them, and **delete** irrelevant jobs directly from the database.
+```bash
+uv run python scripts/export_job_archive.py
+```
+*Note: This will automatically find an open port (like `8000`) and open it in your browser. Press `Ctrl+C` in the terminal to stop the server when you are done.*
+
+### 3. Check for Duplicate Jobs (Manual Tool)
+If you find a job on LinkedIn and want to quickly check if the system has already tracked it:
+```bash
+./scripts/check_job.sh "Job URL" "Company Name" "Position Name"
+```
+
+### 4. Install / Update Dependencies
+If you need to update packages or switch AI providers:
+```bash
+uv sync --all-groups
+uv sync --extra ai-gemini    # Ensure Gemini dependencies are installed
+```
+
 ## Architecture
 
 1. **Ingestion:** Scrapes jobs (via JobSpy) based on configured roles and locations.

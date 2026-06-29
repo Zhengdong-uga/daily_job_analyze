@@ -247,22 +247,23 @@ def is_valid_market_summary(summary: dict, source: str = "unknown") -> bool:
             if data.get("job_count", 0) < 0:
                 missing.append(f"role_analyses.{role}.job_count")
             
-            if not data.get("responsibility_frequencies"):
-                missing.append(f"role_analyses.{role}.responsibility_frequencies")
-                
-            if not data.get("role_specific_insights"):
-                missing.append(f"role_analyses.{role}.role_specific_insights")
-                
-            # Check at least one type of recommendation exists
-            recs = [
-                data.get("case_study_recommendations"),
-                data.get("portfolio_recommendations"),
-                data.get("resume_keywords"),
-                data.get("resume_actions"),
-                data.get("linkedin_actions")
-            ]
-            if not any(r and len(r) > 0 for r in recs):
-                missing.append(f"role_analyses.{role}.recommendations (all missing)")
+            if data.get("job_count", 0) > 0:
+                if not data.get("responsibility_frequencies"):
+                    missing.append(f"role_analyses.{role}.responsibility_frequencies")
+                    
+                if not data.get("role_specific_insights"):
+                    missing.append(f"role_analyses.{role}.role_specific_insights")
+                    
+                # Check at least one type of recommendation exists
+                recs = [
+                    data.get("case_study_recommendations"),
+                    data.get("portfolio_recommendations"),
+                    data.get("resume_keywords"),
+                    data.get("resume_actions"),
+                    data.get("linkedin_actions")
+                ]
+                if not any(r and len(r) > 0 for r in recs):
+                    missing.append(f"role_analyses.{role}.recommendations (all missing)")
                 
     summary_str = json.dumps(summary).lower()
     prohibited = [
@@ -403,11 +404,13 @@ def run_pipeline():
             logging.info(f"DRY RUN: Would have inserted {len(all_cleaned_records)} records.")
 
     # ── Stage 2: Query Recent Jobs (existing, unchanged) ──
-    logging.info(f"Querying database for jobs from the last {hours_old} hours...")
+    # Decouple the database lookback window from the scraping window unless overridden via CLI
+    lookback_hours = (args.hours_old or args.hours) if (args.hours_old or args.hours) is not None else (config.report.lookback_days * 24)
+    logging.info(f"Querying database for jobs from the last {lookback_hours} hours...")
     recent_jobs = []
     try:
         with get_connection() as conn:
-            recent_jobs = query_recent_jobs(conn, since_hours=hours_old, limit=args.limit)
+            recent_jobs = query_recent_jobs(conn, since_hours=lookback_hours, limit=args.limit)
             run_stats["total_recent_checked"] = len(recent_jobs)
             logging.info(f"Retrieved {len(recent_jobs)} recent jobs.")
     except Exception as e:
