@@ -49,9 +49,9 @@ def _format_job_compact(job: Dict[str, Any], keyword_groups: Optional[Dict[str, 
     ]
     
     if reqs["hard_skills"]:
-        lines.append(f"- **Hard Skills:** {', '.join(reqs['hard_skills'][:5])}")
+        lines.append(f"- **Hard Skills:** {', '.join(f'`{s}`' for s in reqs['hard_skills'][:5])}")
     if reqs["soft_skills"]:
-        lines.append(f"- **Soft Skills:** {', '.join(reqs['soft_skills'][:5])}")
+        lines.append(f"- **Soft Skills:** {', '.join(f'`{s}`' for s in reqs['soft_skills'][:5])}")
         
     if include_excerpt and job.get("description"):
         desc = job.get("description", "").replace("\n", " ")[:excerpt_limit]
@@ -96,7 +96,7 @@ def generate_markdown_report(
     lines.append("")
     
     # 1. Executive Summary
-    lines.append("## 1. Executive Summary")
+    lines.append("## 📊 1. Executive Summary")
     lines.append(f"- **Total Scraped:** {run_stats.get('total_scraped', 0)}")
     lines.append(f"- **Total Unique Jobs Analyzed:** {run_stats.get('total_recent_checked', 0)}")
     lines.append(f"- **Total Jobs Included in Report:** {total_matched}")
@@ -114,13 +114,13 @@ def generate_markdown_report(
     lines.append("")
     
     # New: Top 10 Skills
-    lines.append("### Top 10 Skills to Prioritize")
+    lines.append("### 🏆 Top 10 Skills to Prioritize")
     for skill, count in top_skills:
-        lines.append(f"- **{skill}** ({count} mentions)")
+        lines.append(f"- `{skill}` (**{count}** mentions)")
     lines.append("")
     
     # 2. Today's Job Market Trends
-    lines.append("## 2. Today's Job Market Trends")
+    lines.append("## 📈 2. Today's Job Market Trends")
     for trend in trends.get("detailed_trends", []):
         lines.append(f"### Trend: {trend['title']}")
         lines.append(f"**Explanation:**\n{trend['explanation']}\n")
@@ -133,7 +133,7 @@ def generate_markdown_report(
         lines.append("")
         
     # New: Role-to-Skill Matrix
-    lines.append("## Role-to-Skill Matrix")
+    lines.append("## 🧮 Role-to-Skill Matrix")
     if kw_groups and matrix:
         headers = ["Role Cluster"] + [g.replace("_", " ").title() for g in kw_groups.keys()]
         lines.append("| " + " | ".join(headers) + " |")
@@ -149,17 +149,17 @@ def generate_markdown_report(
     lines.append("")
 
     # 3. Specific Job Requirements by Role Type
-    lines.append("## 3. Specific Job Requirements by Role Type")
+    lines.append("## 🛠️ 3. Specific Job Requirements by Role Type")
     for role, data in skill_gaps.get("role_specific_data", {}).items():
         lines.append(f"### {role}")
         if data.get("companies_hiring"):
             lines.append(f"**Top Companies Hiring:** {', '.join(data['companies_hiring'])}")
         lines.append("\n**Required Hard Skills:**")
         for skill in data.get("hard_skills", []):
-            lines.append(f"- {skill}")
+            lines.append(f"- `{skill}`")
         lines.append("\n**Required Soft/Collaboration Skills:**")
         for skill in data.get("soft_skills", []):
-            lines.append(f"- {skill}")
+            lines.append(f"- `{skill}`")
         lines.append("\n**Repeated JD Phrases:**")
         for resp in data.get("phrases", []):
             lines.append(f"- \"{resp}\"")
@@ -169,26 +169,26 @@ def generate_markdown_report(
         lines.append("")
         
     # 4. Skill Demand Overview
-    lines.append("## 4. Skill Demand Overview")
+    lines.append("## ⚡ 4. Skill Demand Overview")
     for group, counts in keyword_counts.items():
         lines.append(f"### {group.replace('_', ' ').title()}")
         for kw, kw_data in counts.items():
             examples = ", ".join([j.get("title", "") for j in kw_data.get("jobs", [])])
-            lines.append(f"- **{kw}** ({kw_data['count']} mentions): e.g., {examples}")
+            lines.append(f"- `{kw}` (**{kw_data['count']}** mentions): e.g., {examples}")
         lines.append("")
         
     # 5. Repeated Responsibilities Across Jobs
-    lines.append("## 5. Repeated Responsibilities Across Jobs")
+    lines.append("## 🔄 5. Repeated Responsibilities Across Jobs")
     for resp in skill_gaps.get("repeated_responsibilities", []):
         lines.append(f"- {resp}")
     lines.append("")
         
     # 6. Resume / Portfolio Keyword Recommendations
-    lines.append("## 6. Resume / Portfolio Keyword Recommendations")
+    lines.append("## 💡 6. Resume & Portfolio Recommendations")
     
     lines.append("### Resume Keywords")
     for kw in skill_gaps.get("resume_keywords", []):
-        lines.append(f"- {kw}")
+        lines.append(f"- `{kw}`")
         
     lines.append("\n### Portfolio Case Study Angles")
     for kw in skill_gaps.get("portfolio_angles", []):
@@ -196,15 +196,15 @@ def generate_markdown_report(
         
     lines.append("\n### LinkedIn Headline/About Keywords")
     for kw in skill_gaps.get("linkedin_keywords", []):
-        lines.append(f"- {kw}")
+        lines.append(f"- `{kw}`")
         
     lines.append("\n### Skills to Learn or Strengthen")
     for kw in skill_gaps.get("skills_to_learn", []):
-        lines.append(f"- {kw}")
+        lines.append(f"- `{kw}`")
     lines.append("")
     
     # 7. Job Clusters
-    lines.append("## 7. Job Clusters")
+    lines.append("## 🗂️ 7. Analyzed Job Listings")
     include_excerpt = getattr(config, "analysis", None) and config.analysis.include_raw_description_excerpt
     excerpt_chars = getattr(config, "analysis", None) and config.analysis.raw_description_excerpt_chars or 500
     

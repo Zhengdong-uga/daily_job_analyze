@@ -70,7 +70,7 @@ def test_generate_markdown_report():
     assert "Total Jobs Included in Report:** 3" in markdown
     
     # Check sections
-    assert "## 1. Executive Summary" in markdown
+    assert "## 📊 1. Executive Summary" in markdown
     assert "## 8. Individual Job Appendix" in markdown
     
     # Check job rendering
