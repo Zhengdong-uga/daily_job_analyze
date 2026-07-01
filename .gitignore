@@ -70,3 +70,4 @@ trackers/*.md
 !trackers/template.md
 !trackers/job-application.md
 reports/
+agent reports

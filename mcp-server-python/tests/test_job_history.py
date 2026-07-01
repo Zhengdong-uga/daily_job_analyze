@@ -640,7 +640,7 @@ def test_report_has_toc_and_anchors():
     
     assert "## Table of Contents" in report
     assert "[Executive Current Market Snapshot](#1-executive-current-market-snapshot)" in report
-    assert "- [SWE Intelligence](#2-swe-intelligence)" in report
+    assert "- [SWE Intelligence](#3-swe-intelligence)" in report
 
 def test_repeated_insight_deduplication():
     # Setup summary with repeated insights
