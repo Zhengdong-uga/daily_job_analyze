@@ -336,3 +336,8 @@ analysis:
     min_current_jobs: 5
     min_previous_jobs: 5
     min_percentage_point_change: 10.0
+
+branding:
+  logo_url: "https://upload.wikimedia.org/wikipedia/commons/thumb/c/c3/Python-logo-notext.svg/1869px-Python-logo-notext.svg.png"
+  intro_text: "Good morning, Joey. Here is your personalized daily roundup of the tech job market. We've scoured the latest postings to bring you the most relevant opportunities and insights."
+

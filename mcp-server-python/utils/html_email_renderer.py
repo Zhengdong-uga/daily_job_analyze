@@ -163,6 +163,13 @@ pre code {
     border-radius: 0;
     font-family: 'Cascadia Code', 'Fira Code', Consolas, monospace;
 }
+img {
+    max-width: 100%;
+    height: auto;
+    border-radius: 8px;
+    display: block;
+    margin: 16px auto;
+}
 hr {
     border: none;
     border-top: 1px solid #e5e7eb;

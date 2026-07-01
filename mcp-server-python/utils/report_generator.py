@@ -430,6 +430,7 @@ def generate_incremental_report(
     ai_update_analyses: Optional[Dict[str, Dict[str, Any]]] = None,
     ai_market_summary: Optional[Dict[str, Any]] = None,
     include_previously_seen: bool = True,
+    chart_cid: str = "",
 ) -> str:
     """
     Generate the incremental Job Intelligence Report using the Current Market Snapshot schema.
@@ -539,8 +540,20 @@ def generate_incremental_report(
     toc_lines.append("")
 
     # ── Assemble Report ──
-    lines = [f"# Current Job Market Snapshot — {today_str}", ""]
+    lines = []
+    branding = getattr(config, "branding", None)
+    if branding:
+        if branding.logo_url:
+            lines.append(f'<div align="center"><img src="{branding.logo_url}" width="200" alt="Logo" style="margin-bottom: 20px;"></div>\n')
+        if branding.intro_text:
+            lines.append(f'<div class="newsletter-intro" style="font-size: 16px; color: #4b5563; line-height: 1.6; margin-bottom: 30px; border-left: 4px solid #4f46e5; padding-left: 15px;">{branding.intro_text}</div>\n')
+
+    lines.extend([f"# Current Job Market Snapshot — {today_str}", ""])
     lines.extend(toc_lines)
+
+    if chart_cid:
+        lines.append(f"![Top Skills Chart](cid:{chart_cid})")
+        lines.append("")
 
     # ── Section 1: Executive Current Market Snapshot ──
     lines.append("## 1. Executive Current Market Snapshot")

@@ -307,6 +307,8 @@ def send_email_report(
             maintype=maintype,
             subtype=subtype,
             filename=fpath.name,
+            cid=f"<{fpath.name}>",
+            disposition="inline" if maintype == "image" else "attachment",
         )
         attached_names.append(fpath.name)
 

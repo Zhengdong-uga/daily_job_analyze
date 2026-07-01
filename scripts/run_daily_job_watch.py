@@ -54,6 +54,7 @@ from utils.report_generator import (
 from utils.scrape_normalizer import normalize_and_filter, serialize_payload
 from utils.watch_config import ConfigValidationError, load_config
 from utils.jd_analyzer import summarize_job_description, extract_job_requirements
+from utils.chart_generator import generate_skill_demand_chart
 from utils.email_sender import (
     build_incremental_email_subject,
     build_zero_new_email_body,
@@ -876,6 +877,31 @@ def run_pipeline():
 
     # ── Stage 6: Generate Incremental Report ──
     logging.info("Generating incremental report...")
+    
+    # Pre-compute chart data from AI market summary
+    chart_cid = ""
+    chart_path = None
+    if ai_market_summary and ai_market_summary.get("role_analyses"):
+        try:
+            skill_counts = {}
+            for role, data in ai_market_summary["role_analyses"].items():
+                for req in data.get("required_skill_frequencies", []):
+                    skill_name = req.get("skill", "")
+                    count = req.get("count", 0)
+                    if skill_name and count:
+                        # Capitalize properly for chart
+                        skill_name = skill_name.title()
+                        skill_counts[skill_name] = skill_counts.get(skill_name, 0) + count
+            
+            if skill_counts:
+                output_dir = resolve_repo_relative_path(config.report.output_dir)
+                chart_path = output_dir / f"{date.today().strftime('%Y-%m-%d')}-skill-chart.png"
+                generate_skill_demand_chart(skill_counts, chart_path)
+                chart_cid = chart_path.name
+                logging.info(f"Generated skill demand chart at {chart_path}")
+        except Exception as e:
+            logging.warning(f"Failed to generate skill chart: {e}")
+
     markdown_report = generate_incremental_report(
         classified_jobs=classified,
         run_stats=run_stats,
@@ -885,6 +911,7 @@ def run_pipeline():
         ai_update_analyses=ai_update_analyses,
         ai_market_summary=ai_market_summary,
         include_previously_seen=args.include_previously_seen,
+        chart_cid=chart_cid,
     )
     
     # Mark reported jobs
@@ -952,6 +979,10 @@ def run_pipeline():
                 # Only attach full report if there are new/updated jobs
                 if new_count > 0 or updated_count > 0:
                     attachment_paths.append(report_path)
+                    
+            # Attach chart for inline display
+            if chart_path and chart_path.exists():
+                attachment_paths.append(chart_path)
 
             # Use short plain text for zero-new runs if not including all current jobs
             plain_text = markdown_report

@@ -57,6 +57,11 @@ class ReportConfig:
 
 
 @dataclass
+class BrandingConfig:
+    logo_url: str = "https://raw.githubusercontent.com/Zhengdong-uga/daily_job_analyze/main/assets/placeholder_logo.png"
+    intro_text: str = "Good morning. Here is your personalized daily roundup of the tech job market."
+
+@dataclass
 class EmailConfig:
     enabled: bool = False
     send_html: bool = True
@@ -145,6 +150,7 @@ class JobWatchConfig:
     scrape: ScrapeConfig = field(default_factory=ScrapeConfig)
     report: ReportConfig = field(default_factory=ReportConfig)
     email: EmailConfig = field(default_factory=EmailConfig)
+    branding: BrandingConfig = field(default_factory=BrandingConfig)
     ai_summary: AiSummaryConfig = field(default_factory=AiSummaryConfig)
     ai_analysis: AiAnalysisConfig = field(default_factory=AiAnalysisConfig)
     analysis_scope: AnalysisScopeConfig = field(default_factory=AnalysisScopeConfig)
