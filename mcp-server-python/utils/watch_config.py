@@ -138,6 +138,7 @@ class JobWatchConfig:
     location_aliases: Dict[str, List[str]] = field(default_factory=dict)
     preferred_companies: List[str] = field(default_factory=list)
     exclude_companies: List[str] = field(default_factory=list)
+    my_arsenal: List[str] = field(default_factory=list)
     include_keywords: List[str] = field(default_factory=list)
     exclude_keywords: List[str] = field(default_factory=list)
     preferences: PreferencesConfig = field(default_factory=PreferencesConfig)
@@ -345,6 +346,7 @@ def load_config(config_path: Path) -> JobWatchConfig:
         location_aliases=_parse_dict_of_lists(data, "location_aliases"),
         preferred_companies=_parse_list(data, "preferred_companies"),
         exclude_companies=_parse_list(data, "exclude_companies"),
+        my_arsenal=_parse_list(data, "my_arsenal"),
         include_keywords=_parse_list(data, "include_keywords"),
         exclude_keywords=_parse_list(data, "exclude_keywords"),
         preferences=preferences,

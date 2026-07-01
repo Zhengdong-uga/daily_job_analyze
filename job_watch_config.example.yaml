@@ -150,6 +150,19 @@ exclude_keywords:
   - "7+ years"
 
 # -----------------------------------------------------------------------------
+# My Arsenal (Skill Gap Analysis)
+# -----------------------------------------------------------------------------
+# Skills you already possess. The report will highlight high-value skills 
+# that are currently missing from your arsenal.
+my_arsenal:
+  - "Python"
+  - "SQL"
+  - "React"
+  - "TypeScript"
+  - "Git"
+
+
+# -----------------------------------------------------------------------------
 # Match Preferences
 # -----------------------------------------------------------------------------
 preferences:

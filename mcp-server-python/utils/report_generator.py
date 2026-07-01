@@ -517,6 +517,8 @@ def generate_incremental_report(
     toc_lines = []
     toc_lines.append("## Table of Contents")
     toc_lines.append("- [Executive Current Market Snapshot](#1-executive-current-market-snapshot)")
+    if getattr(config, "my_arsenal", []):
+        toc_lines.append("- [My Arsenal Gap Analysis](#15-my-arsenal-gap-analysis)")
     toc_lines.append("- [Detailed Current Jobs](#2-detailed-current-jobs-grouped-by-role)")
     
     for i, role in enumerate(roles, start=3):
@@ -557,6 +559,37 @@ def generate_incremental_report(
     if snapshot and snapshot.get("executive_summary"):
         for t in snapshot["executive_summary"][:5]:
             lines.append(f"- {_truncate_words(t, max_executive_words)}")
+        lines.append("")
+
+    my_arsenal = getattr(config, "my_arsenal", [])
+    if my_arsenal and ai_market_summary.get("role_analyses"):
+        lines.append("## 1.5 My Arsenal Gap Analysis")
+        lines.append("")
+        
+        missing_skills = {}
+        my_arsenal_lower = {s.lower().strip() for s in my_arsenal}
+        
+        for role, data in ai_market_summary["role_analyses"].items():
+            for req in data.get("required_skill_frequencies", []):
+                skill_name = req.get("skill", "")
+                if not skill_name: continue
+                
+                if skill_name.lower().strip() not in my_arsenal_lower:
+                    if skill_name not in missing_skills:
+                        missing_skills[skill_name] = 0
+                    missing_skills[skill_name] += req.get("count", 0)
+                    
+        sorted_missing = sorted(missing_skills.items(), key=lambda x: x[1], reverse=True)
+        # Only show skills that appeared at least once
+        top_missing = [s for s in sorted_missing if s[1] > 0][:5]
+        
+        if top_missing:
+            lines.append("**High-demand skills required by the market but currently missing from your arsenal:**")
+            for skill, count in top_missing:
+                lines.append(f"- **{skill}** (Mentioned {count} times) -> Recommended for your learning plan")
+        else:
+            lines.append("*Excellent! All high-frequency core skills required by the current market are already in your arsenal.*")
+            
         lines.append("")
 
     # ── Section 2: Detailed Current Jobs ──
