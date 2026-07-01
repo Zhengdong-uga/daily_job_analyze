@@ -1,0 +1,338 @@
+# Job Watch Configuration Example
+# Copy this file to job_watch_config.yaml and edit it to match your preferences.
+# This file serves as the single source of truth for the daily job monitor MVP.
+
+# -----------------------------------------------------------------------------
+# Target Roles
+# -----------------------------------------------------------------------------
+# Define the exact job roles you are looking for.
+# The tool will dynamically build the report around these exact role names.
+# You can use a simple string, or a dictionary to define aliases directly.
+target_roles:
+#   - name: "AI Engineer"
+#     aliases:
+#       - "Applied AI Engineer"
+#       - "Generative AI Engineer"
+  - name: "Forward Deployed Engineer"
+    aliases:
+      - "Forward Deployed Software Engineer"
+      - "Forward Deployed AI Engineer"
+      - "Deployment Strategist"
+      - "Solutions Engineer"
+      - "AI Solutions Engineer"
+  - name: "Product Designer"
+    aliases:
+      - "UX Designer"
+      - "Product Design"
+      - "Interaction Designer"
+  - name: "Frontend Engineer"
+    aliases:
+      - "Frontend Developer"
+      - "Front End Engineer"
+      - "React Engineer"
+
+# (Optional) You can still define aliases here, but the inline format above is preferred.
+role_aliases: {}
+
+# -----------------------------------------------------------------------------
+# Locations
+# -----------------------------------------------------------------------------
+# Define your target locations.
+locations:
+  - "New York, NY"
+  - "New Jersey"
+
+# Define aliases for your target locations.
+location_aliases:
+  "New York, NY":
+    - "New York"
+    - "NYC"
+    - "Manhattan"
+    - "Brooklyn"
+  "New Jersey":
+    - "Jersey City"
+    - "Hoboken"
+    - "Newark"
+    # - "Princeton"
+
+# -----------------------------------------------------------------------------
+# Company Preferences
+# -----------------------------------------------------------------------------
+# Jobs at these companies will get a score boost (+20) and appear at the top.
+preferred_companies:
+  - "OpenAI"
+  - "Anthropic"
+  - "Perplexity"
+  - "Palantir"
+  - "Databricks"
+  - "Figma"
+  - "Notion"
+  - "Meta"
+  - "Google"
+  - "Netflix"
+  - "Amazon"
+  - "Adobe"
+  - "Airbnb"
+  - "Uber"
+  - "Spotify"
+
+# Jobs from these companies will be entirely excluded from the report.
+exclude_companies:
+  - "Revature"
+  - "Dice"
+  - "DataAnnotation"
+
+# -----------------------------------------------------------------------------
+# Keyword Filters
+# -----------------------------------------------------------------------------
+# Finding these keywords in the job title or description adds a score boost (+5 each).
+include_keywords:
+  - "AI"
+  - "LLM"
+  - "machine learning"
+  - "generative AI"
+  - "product design"
+  - "design systems"
+  - "Figma"
+  - "React"
+  - "TypeScript"
+  - "frontend"
+  - "prototype"
+  - "human-centered"
+  - "user experience"
+
+# Finding ANY of these keywords in the job title or description will exclude the job.
+exclude_keywords:
+  - "Senior Director"
+  - "Director"
+  - "VP"
+  - "Principal"
+  - "Staff"
+  - "10+ years"
+  - "12+ years"
+  - "Security Clearance"
+  - "US Citizen required"
+  - "Senior"
+  - "Manager"
+  - "Lead"
+  - "Staff"
+
+# -----------------------------------------------------------------------------
+# My Arsenal (Skill Gap Analysis)
+# -----------------------------------------------------------------------------
+# Skills you already possess. The report will highlight high-value skills 
+# that are currently missing from your arsenal.
+my_arsenal:
+  # Languages
+  - "Python"
+  - "TypeScript"
+  - "JavaScript"
+  - "SQL"
+  - "C#"
+  - "HTML/CSS"
+
+  # Frontend & Spatial
+  - "React"
+  - "Next.js"
+  - "React Native"
+  - "React Three Fiber"
+  - "Three.js"
+  - "WebGL/GLSL"
+  - "GSAP"
+  - "Framer Motion"
+  - "TailwindCSS"
+  - "shadcn/ui"
+  - "Matter.js"
+
+  # Backend & Infra
+  - "Node.js"
+  - "Django REST"
+  - "FastAPI"
+  - "PostgreSQL"
+  - "Supabase"
+  - "Firebase"
+  - "Appwrite"
+  - "WebSockets"
+  - "Stripe APIs"
+  - "Plaid API"
+  - "NextAuth.js"
+  - "FFmpeg"
+  - "Vercel"
+  - "Render"
+  - "Git"
+  - "CI/CD"
+
+  # AI & Agent Systems
+  - "LangGraph"
+  - "Multi-Agent Orchestration"
+  - "MCP"
+  - "RAG"
+  - "pgvector"
+  - "Tavily"
+  - "LangSmith"
+  - "Prompt Engineering"
+  - "LLMOps"
+  - "Claude"
+  - "GPT-4o"
+  - "Gemini"
+  - "FastAPI SSE"
+  - "JWKS Auth"
+
+  # Design Tools
+  - "Figma"
+  - "FigJam"
+  - "Adobe Illustrator"
+  - "Adobe Photoshop"
+  - "Framer"
+  - "Miro"
+
+  # Design & UX Methods
+  - "Design Systems"
+  - "Design Tokens"
+  - "Auto Layout"
+  - "Information Architecture"
+  - "Journey Mapping"
+  - "Heuristic Evaluation"
+  - "Usability Testing"
+  - "A/B Testing"
+  - "User Interviews"
+  - "WCAG 2.1"
+  - "Service Design"
+  - "Atomic Design"
+  - "Conversational UI"
+  - "Brand Identity"
+  - "Motion Design"
+
+  # XR
+  - "Unity"
+  - "Meta XR SDK"
+  - "XR Interaction Toolkit"
+  - "Hand Tracking"
+  - "Gaze UI"
+  - "Haptic Feedback"
+
+  # Video & Creative
+  - "AI Video Pipeline"
+  - "HiggsField"
+  - "Runway"
+  - "Luma"
+  - "Video Editing"
+  - "Generative AI"
+
+  # Testing & Observability
+  - "Jest"
+  - "React Testing Library"
+  - "Sentry"
+
+  # Languages (Human)
+  - "English (Fluent)"
+  - "Mandarin Chinese (Native)"
+
+
+# -----------------------------------------------------------------------------
+# Match Preferences
+# -----------------------------------------------------------------------------
+preferences:
+  remote:
+    include_remote: true
+    include_hybrid: true
+    include_onsite: true
+  seniority:
+    include_internship: false
+    include_entry_level: true
+    include_mid_level: true
+    include_senior: false
+  max_years_of_experience: 3
+  # Jobs scoring below this threshold will be excluded from the final report.
+  # Target role match = +30, Target location match = +20
+  minimum_match_score: 40
+  # Maximum number of jobs to include in the generated report.
+  max_jobs_in_report: 50
+
+# -----------------------------------------------------------------------------
+# Scraping Configuration
+# -----------------------------------------------------------------------------
+scrape:
+  sites:
+    - "linkedin"
+  # Target number of results per role+location pair to fetch from the provider.
+  results_wanted: 30
+  # Only fetch jobs posted within the last N hours.
+  hours_old: 24
+  # If true, skips records where the job description cannot be fetched.
+  require_description: true
+
+# -----------------------------------------------------------------------------
+# Output Reporting
+# -----------------------------------------------------------------------------
+report:
+  # Output directory relative to the repository root.
+  output_dir: "reports/daily"
+  # Number of days of historical jobs to include in the market analysis.
+  lookback_days: 3
+  # Format of the report. Currently 'markdown' is supported.
+  format: "markdown"
+  # Include an optional historical changes section when data permits
+  include_role_history_changes: false
+
+# -----------------------------------------------------------------------------
+# Email Configuration (Optional)
+# -----------------------------------------------------------------------------
+email:
+  enabled: false
+  smtp_host: "smtp.gmail.com"
+  smtp_port: 587
+  smtp_user: ""  # Leave blank to use JOBWATCH_EMAIL_USER env var
+  sender_email: ""
+  recipient_email: ""
+  subject_prefix: "Daily Job Watch Report"
+
+# -----------------------------------------------------------------------------
+# AI Summary Configuration (Legacy — kept for backward compatibility)
+# -----------------------------------------------------------------------------
+ai_summary:
+  enabled: false
+  provider: "openai"
+  model: "gpt-4o-mini"
+  # Maximum number of top jobs to send to the AI for summarization.
+  max_jobs: 20
+
+# -----------------------------------------------------------------------------
+# AI Analysis Configuration (Incremental Intelligence)
+# -----------------------------------------------------------------------------
+# Supports Gemini and OpenAI. Set API keys in .env:
+#   JOBWATCH_GEMINI_API_KEY=your-key
+#   JOBWATCH_OPENAI_API_KEY=your-key
+# Install AI dependencies: uv sync --extra ai
+ai_analysis:
+  enabled: true
+  provider: "gemini"         # "gemini" or "openai"
+  model: "gemini-2.5-flash"  # default fallback model
+  extraction_model: ""       # e.g., gemini-2.5-flash
+  synthesis_model: ""        # e.g., gemini-2.5-pro
+  fallback_to_rules: true    # Use rule-based analysis if AI fails
+  analyze_new_jobs: true
+  analyze_updated_jobs: true
+  analyze_unchanged_jobs: true
+  generate_comparative_summary: true
+  max_jobs_per_run: 30
+  max_description_chars: 12000
+  cache_results: true
+  temperature: 0.2
+
+# -----------------------------------------------------------------------------
+# Rule-Based Analysis Configuration
+# -----------------------------------------------------------------------------
+analysis:
+  enabled: true
+  dedupe_by_url: true
+  show_match_scores: false
+  include_raw_description_excerpt: false
+  raw_description_excerpt_chars: 500
+  top_keywords_limit: 30
+  max_examples_per_keyword: 3
+  max_examples_per_trend: 5
+  trend_analysis:
+    min_current_jobs: 5
+    min_previous_jobs: 5
+    min_percentage_point_change: 10.0
