@@ -902,6 +902,12 @@ def run_pipeline():
         except Exception as e:
             logging.warning(f"Failed to generate skill chart: {e}")
 
+    # Check for github banner
+    banner_cid = ""
+    banner_path = resolve_repo_relative_path("github_banner.png")
+    if banner_path.exists():
+        banner_cid = banner_path.name
+        
     markdown_report = generate_incremental_report(
         classified_jobs=classified,
         run_stats=run_stats,
@@ -912,6 +918,7 @@ def run_pipeline():
         ai_market_summary=ai_market_summary,
         include_previously_seen=args.include_previously_seen,
         chart_cid=chart_cid,
+        banner_cid=banner_cid,
     )
     
     # Mark reported jobs
@@ -983,6 +990,10 @@ def run_pipeline():
             # Attach chart for inline display
             if chart_path and chart_path.exists():
                 attachment_paths.append(chart_path)
+                
+            # Attach github banner for inline display
+            if banner_cid and banner_path.exists():
+                attachment_paths.append(banner_path)
 
             # Use short plain text for zero-new runs if not including all current jobs
             plain_text = markdown_report

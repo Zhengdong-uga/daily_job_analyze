@@ -167,8 +167,7 @@ img {
     max-width: 100%;
     height: auto;
     border-radius: 8px;
-    display: block;
-    margin: 16px auto;
+    margin: 16px 0;
 }
 hr {
     border: none;
@@ -217,6 +216,8 @@ def markdown_to_email_html(
             "sane_lists",
             "smarty",
             "nl2br",
+            "toc",
+            "md_in_html",
         ],
         output_format="html",
     )

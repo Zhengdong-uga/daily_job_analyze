@@ -321,10 +321,13 @@ def _format_ai_job_card(job: Dict[str, Any], ai_result: Optional[Dict[str, Any]]
     location = job.get("location", "Unknown Location")
     url = job.get("url", "#")
 
-    lines = [f"#### [{title} @ {company}]({url})", f"📍 {location}"]
+    lines = [f"#### [{title} @ {company}]({url})"]
+    if location and location.lower() != "unknown location":
+        lines.append(f"📍 {location}")
 
     if ai_result and ai_result.get("summary"):
         lines.append(f"\n**Summary:** {ai_result['summary']}")
+        lines.append("") # Blank line to start list block
         if ai_result.get("required_skills"):
             lines.append(f"- **Required Skills:** {', '.join(ai_result['required_skills'][:8])}")
         if ai_result.get("preferred_skills"):
@@ -332,7 +335,8 @@ def _format_ai_job_card(job: Dict[str, Any], ai_result: Optional[Dict[str, Any]]
         if ai_result.get("core_responsibilities"):
             lines.append("- **Key Responsibilities:**")
             for r in ai_result["core_responsibilities"][:3]:
-                lines.append(f"  - {r}")
+                clean_r = r.lstrip("-• ").strip()
+                lines.append(f"    - {clean_r}")
         if ai_result.get("job_seeker_takeaway"):
             lines.append(f"- **💡 Takeaway:** {ai_result['job_seeker_takeaway']}")
     else:
@@ -341,8 +345,8 @@ def _format_ai_job_card(job: Dict[str, Any], ai_result: Optional[Dict[str, Any]]
         if desc:
             snippet = desc[:300].replace("\n", " ").strip()
             lines.append(f"\n> {snippet}...")
+            lines.append("")
 
-    lines.append(f"- 🔗 [Apply]({url})")
     lines.append("")
     return "\n".join(lines)
 
@@ -354,28 +358,39 @@ def _format_updated_job_card(job: Dict[str, Any], change_analysis: Optional[Dict
     url = job.get("url", "#")
 
     lines = [f"#### [{title} @ {company}]({url})"]
+    location = job.get("location", "")
+    if location and location.lower() != "unknown location":
+        lines.append(f"📍 {location}")
 
     if change_analysis:
         if change_analysis.get("change_summary"):
             lines.append("**What Changed:**")
+            lines.append("")
             for change in change_analysis["change_summary"]:
-                lines.append(f"- {change}")
+                clean_c = change.lstrip("-• ").strip()
+                lines.append(f"- {clean_c}")
         if change_analysis.get("new_requirements"):
             lines.append("**New Requirements:**")
+            lines.append("")
             for req in change_analysis["new_requirements"]:
-                lines.append(f"- ➕ {req}")
+                clean_r = req.lstrip("-•➕ ").strip()
+                lines.append(f"- ➕ {clean_r}")
         if change_analysis.get("removed_requirements"):
             lines.append("**Removed Requirements:**")
+            lines.append("")
             for req in change_analysis["removed_requirements"]:
-                lines.append(f"- ➖ {req}")
+                clean_r = req.lstrip("-•➖ ").strip()
+                lines.append(f"- ➖ {clean_r}")
         if change_analysis.get("changed_responsibilities"):
             lines.append("**Changed Responsibilities:**")
+            lines.append("")
             for resp in change_analysis["changed_responsibilities"]:
-                lines.append(f"- 🔄 {resp}")
+                clean_r = resp.lstrip("-•🔄 ").strip()
+                lines.append(f"- 🔄 {clean_r}")
     else:
         lines.append("*Content hash changed since last seen. Detailed diff unavailable (AI disabled).*")
+        lines.append("")
 
-    lines.append(f"- 🔗 [Apply]({url})")
     lines.append("")
     return "\n".join(lines)
 
@@ -431,6 +446,7 @@ def generate_incremental_report(
     ai_market_summary: Optional[Dict[str, Any]] = None,
     include_previously_seen: bool = True,
     chart_cid: str = "",
+    banner_cid: str = "",
 ) -> str:
     """
     Generate the incremental Job Intelligence Report using the Current Market Snapshot schema.
@@ -506,6 +522,7 @@ def generate_incremental_report(
     for role in roles:
         if grouped_jobs[role]:
             jobs_lines.append(f"### {role}")
+            jobs_lines.append("")
             for job_tuple in grouped_jobs[role][:limit_per_role]:
                 jobs_lines.append(job_tuple[1])
             if len(grouped_jobs[role]) > limit_per_role:
@@ -533,31 +550,32 @@ def generate_incremental_report(
         sec_num += 1
         toc_lines.append(f"- [Notable Changes](#{sec_num}-notable-changes)")
         
-    if include_appendix:
-        sec_num += 1
-        toc_lines.append(f"- [Evidence Appendix](#{sec_num}-evidence-appendix)")
-        
     toc_lines.append("")
 
     # ── Assemble Report ──
     lines = []
-    branding = getattr(config, "branding", None)
-    if branding:
-        if branding.logo_url:
-            lines.append(f'<div align="center"><img src="{branding.logo_url}" width="200" alt="Logo" style="margin-bottom: 20px;"></div>\n')
-        if branding.intro_text:
-            lines.append(f'<div class="newsletter-intro" style="font-size: 16px; color: #4b5563; line-height: 1.6; margin-bottom: 30px; border-left: 4px solid #4f46e5; padding-left: 15px;">{branding.intro_text}</div>\n')
+    
+    if banner_cid:
+        lines.append(f'<div align="center"><a href="https://github.com/Zhengdong-uga"><img src="cid:{banner_cid}" alt="GitHub Banner" style="width: 100%; max-width: 800px; border-radius: 8px; margin-bottom: 20px;"></a></div>\n')
+    else:
+        branding = getattr(config, "branding", None)
+        if branding:
+            if branding.logo_url:
+                lines.append(f'<div align="center"><img src="{branding.logo_url}" width="200" alt="Logo" style="margin-bottom: 20px;"></div>\n')
+            if branding.intro_text:
+                lines.append(f'<div class="newsletter-intro" style="font-size: 16px; color: #4b5563; line-height: 1.6; margin-bottom: 30px; border-left: 4px solid #4f46e5; padding-left: 15px;">{branding.intro_text}</div>\n')
 
     lines.extend([f"# Current Job Market Snapshot — {today_str}", ""])
     lines.extend(toc_lines)
+
+    # ── Section 1: Executive Current Market Snapshot ──
+    lines.append("## 1. Executive Current Market Snapshot")
+    lines.append("")
 
     if chart_cid:
         lines.append(f"![Top Skills Chart](cid:{chart_cid})")
         lines.append("")
 
-    # ── Section 1: Executive Current Market Snapshot ──
-    lines.append("## 1. Executive Current Market Snapshot")
-    lines.append("")
     lines.append("| Metric | Value |")
     lines.append("|---|---|")
     lines.append(f"| Scrape window | Last {run_stats.get('scrape_hours_old', '?')} hours |")
@@ -598,6 +616,7 @@ def generate_incremental_report(
         
         if top_missing:
             lines.append("**High-demand skills required by the market but currently missing from your arsenal:**")
+            lines.append("")
             for skill, count in top_missing:
                 lines.append(f"- **{skill}** (Mentioned {count} times) -> Recommended for your learning plan")
         else:
