@@ -20,7 +20,6 @@ This tool was customized to solve the problem of overwhelming job boards and rep
 - **Robust Fallbacks:** Integrates local deterministic logic and caching so that even if the AI budget is reached or the API fails, you still get a comprehensive breakdown of skill trends and active roles.
 - **Automated Delivery:** Renders the rich Markdown report into a beautiful, Gmail-compatible HTML email format and sends it directly to your inbox.
 
-*Note: This project is built upon the original JobWorkFlow/MCP scaffolding which provides the base SQLite ingestion and MCP tools.*
 
 ## Quick Start
 
