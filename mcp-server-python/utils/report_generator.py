@@ -25,6 +25,14 @@ from utils.jd_analyzer import (
 )
 
 
+def _ensure_list(val: Any) -> List[str]:
+    """Ensure a value is a list of strings, wrapping it if it's a single string."""
+    if not val:
+        return []
+    if isinstance(val, str):
+        return [val]
+    return list(val)
+
 def _format_job_compact(job: Dict[str, Any], keyword_groups: Optional[Dict[str, List[str]]] = None, include_excerpt: bool = False, excerpt_limit: int = 500) -> str:
     """Format a single job record into a compact card."""
     title = job.get("title", "Unknown Title")
@@ -97,8 +105,13 @@ def generate_markdown_report(
     
     # 1. Executive Summary
     lines.append("## 📊 1. Executive Summary")
+    
+    total_checked = run_stats.get('total_recent_checked', 0)
+    excluded_count = total_checked - total_matched
+    
     lines.append(f"- **Total Scraped:** {run_stats.get('total_scraped', 0)}")
-    lines.append(f"- **Total Unique Jobs Analyzed:** {run_stats.get('total_recent_checked', 0)}")
+    lines.append(f"- **Total Jobs Analyzed:** {total_checked}")
+    lines.append(f"- **Total Jobs Excluded (Filters/YoE/Staffing):** {excluded_count}")
     lines.append(f"- **Total Jobs Included in Report:** {total_matched}")
     lines.append(f"- **Top Companies:** {top_companies_str}")
     lines.append(f"- **Top Locations:** {top_locations_str}")
@@ -579,16 +592,23 @@ def generate_incremental_report(
     lines.append("| Metric | Value |")
     lines.append("|---|---|")
     lines.append(f"| Scrape window | Last {run_stats.get('scrape_hours_old', '?')} hours |")
-    lines.append(f"| Unique jobs analyzed | {run_stats.get('unique_count', 0)} |")
-    lines.append(f"| **New jobs** | **{len(new_jobs)}** |")
-    lines.append(f"| **Updated jobs** | **{len(updated_jobs)}** |")
-    lines.append(f"| Previously seen | {len(unchanged_jobs)} |")
+    
+    total_checked = run_stats.get('total_recent_checked', 0)
+    total_matched = run_stats.get('unique_count', 0)
+    excluded_count = total_checked - total_matched
+    
+    lines.append(f"| Total jobs analyzed | {total_checked} |")
+    lines.append(f"| **Jobs excluded (Filters/YoE/Staffing)** | **{excluded_count}** |")
+    lines.append(f"| Jobs meeting criteria | {total_matched} |")
+    lines.append(f"| ↳ **New jobs** | **{len(new_jobs)}** |")
+    lines.append(f"| ↳ **Updated jobs** | **{len(updated_jobs)}** |")
+    lines.append(f"| ↳ Previously seen | {len(unchanged_jobs)} |")
     lines.append(f"| AI/Cache extractions | {run_stats.get('ai_analyzed_count', 0)} ({run_stats.get('cache_hits', 0)} cached, {run_stats.get('fallback_count', 0)} rule fallbacks) |")
     lines.append("")
     
     snapshot = ai_market_summary.get("market_snapshot", {})
     if snapshot and snapshot.get("executive_summary"):
-        for t in snapshot["executive_summary"][:5]:
+        for t in _ensure_list(snapshot["executive_summary"])[:5]:
             lines.append(f"- {_truncate_words(t, max_executive_words)}")
         lines.append("")
 
@@ -646,7 +666,7 @@ def generate_incremental_report(
         
         if data.get("role_specific_insights"):
             lines.append("### Snapshot")
-            for insight in data["role_specific_insights"]:
+            for insight in _ensure_list(data["role_specific_insights"]):
                 lines.append(f"- {insight}")
             lines.append("")
             
@@ -686,7 +706,7 @@ def generate_incremental_report(
             
         if data.get("ideal_candidate_profile"):
             lines.append("### Ideal Candidate Profile")
-            for p in data["ideal_candidate_profile"]:
+            for p in _ensure_list(data["ideal_candidate_profile"]):
                 lines.append(f"- {p}")
             lines.append("")
             
@@ -694,21 +714,21 @@ def generate_incremental_report(
         recs = []
         if data.get("case_study_recommendations"):
             recs.append("**Recommended Case Study / Project:**")
-            for r in data["case_study_recommendations"]:
+            for r in _ensure_list(data["case_study_recommendations"]):
                 recs.append(f"- {r}")
         if data.get("portfolio_recommendations"):
             recs.append("**Portfolio Presentation Recommendations:**")
-            for r in data["portfolio_recommendations"]:
+            for r in _ensure_list(data["portfolio_recommendations"]):
                 recs.append(f"- {r}")
         if data.get("resume_keywords"):
-            recs.append(f"**Resume Keywords:** {', '.join(data['resume_keywords'])}")
+            recs.append(f"**Resume Keywords:** {', '.join(_ensure_list(data['resume_keywords']))}")
         if data.get("resume_actions"):
             recs.append("**Resume Actions:**")
-            for r in data["resume_actions"]:
+            for r in _ensure_list(data["resume_actions"]):
                 recs.append(f"- {r}")
         if data.get("linkedin_actions"):
             recs.append("**LinkedIn Actions:**")
-            for r in data["linkedin_actions"]:
+            for r in _ensure_list(data["linkedin_actions"]):
                 recs.append(f"- {r}")
             
         lines.extend(recs)
@@ -720,7 +740,7 @@ def generate_incremental_report(
     lines.append(f"## {sec_num}. Cross-Role Patterns")
     lines.append("")
     if ai_market_summary.get("cross_role_patterns"):
-        for pattern in ai_market_summary["cross_role_patterns"]:
+        for pattern in _ensure_list(ai_market_summary["cross_role_patterns"]):
             lines.append(f"- {pattern}")
     else:
         lines.append("*No cross-role patterns generated.*")
@@ -731,7 +751,7 @@ def generate_incremental_report(
     if getattr(config.report, "include_role_history_changes", False) and ai_market_summary.get("optional_role_changes"):
         lines.append(f"## {sec_num}. Notable Changes")
         lines.append("")
-        for change in ai_market_summary["optional_role_changes"]:
+        for change in _ensure_list(ai_market_summary["optional_role_changes"]):
             lines.append(f"- {change}")
         lines.append("")
         sec_num += 1

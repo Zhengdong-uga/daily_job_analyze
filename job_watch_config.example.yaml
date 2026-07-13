@@ -155,11 +155,62 @@ exclude_keywords:
 # Skills you already possess. The report will highlight high-value skills 
 # that are currently missing from your arsenal.
 my_arsenal:
+
+  # Languages
   - "Python"
-  - "SQL"
-  - "React"
   - "TypeScript"
-  - "Git"
+
+  # Frontend & Spatial
+  - "React"
+  - "Next.js"
+  - "React Native"
+  - "React Three Fiber"
+
+  # Backend & Infra
+  - "Node.js"
+  - "Django REST"
+  - "FastAPI"
+  - "PostgreSQL"
+  - "Supabase"
+
+  # AI & Agent Systems
+  - "LangGraph"
+  - "Multi-Agent Orchestration"
+  - "MCP"
+  - "RAG"
+  - "pgvector"
+  - "Tavily"
+  - "LangSmith"
+  - "Prompt Engineering"
+  - "LLMOps"
+
+  # Design Tools
+  - "Figma"
+  - "FigJam"
+
+  # Design & UX Methods
+  - "Design Systems"
+  - "Design Tokens"
+  - "Auto Layout"
+  - "Information Architecture"
+  - "Journey Mapping"
+
+  # XR
+  - "Unity"
+  - "Meta XR SDK"
+
+  # Video & Creative
+  - "AI Video Pipeline"
+  - "HiggsField"
+  - "Runway"
+
+  # Testing & Observability
+  - "Jest"
+  - "React Testing Library"
+  - "Sentry"
+
+  # Languages (Human)
+  - "English (Fluent)"
 
 
 # -----------------------------------------------------------------------------
